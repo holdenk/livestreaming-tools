@@ -27,22 +27,21 @@ def unix_time_seconds(dt):
     epoch = pytz.UTC.localize(datetime.datetime.utcfromtimestamp(0))
     return (dt - epoch).total_seconds()
 
-# More or less https://github.com/youtube/api-samples/blob/master/python/list_streams.py
 
 # Retrieve a list of the liveStream resources associated with the currently
 # authenticated user's channel.
 def list_streams(youtube):
-  list_streams_request = youtube.liveBroadcasts().list(
-    part='id,snippet',
-    mine=True,
-    maxResults=50
-  )
+    list_streams_request = youtube.liveBroadcasts().list(
+        part='id,snippet',
+        mine=True,
+        maxResults=50
+    )
 
-  results = []
+    results = []
 
-  # Collect the results over multiple pages of youtube responses
-  while list_streams_request:
-    list_streams_response = list_streams_request.execute()
+    # Collect the results over multiple pages of youtube responses
+    while list_streams_request:
+        list_streams_response = list_streams_request.execute()
 
     def extract_information(stream):
         parsed_time = datetime.datetime.strptime(
@@ -58,17 +57,17 @@ def list_streams(youtube):
             "url": "https://www.youtube.com/watch?v={0}".format(stream['id']),
             "scheduledStartTime": parsed_time,
             "image_url": stream['snippet']['thumbnails']['medium']['url']}
-                
+
     responses = list_streams_response.get('items', [])
     future_streams = filter(
         lambda response: "actualEndTime" not in response["snippet"], responses)
     extracted_values = map(extract_information, future_streams)
     results.extend(extracted_values)
-    
+
     list_streams_request = youtube.liveStreams().list_next(
       list_streams_request, list_streams_response)
 
-  return results
+    return results
 
 
 # Authorize the request and store authorization credentials.
@@ -83,19 +82,19 @@ def get_authenticated_youtube_service():
 
     def yt_cred_to_dict(credentials):
         """Convert the credentials into a form we can serialize."""
-        return  {
-        'token': credentials.token,
-        'refresh_token': credentials.refresh_token,
-        'id_token':credentials.id_token,
-        'token_uri': credentials.token_uri,
-        'client_id': credentials.client_id,
-        'client_secret': credentials.client_secret,
-        'scopes': credentials.scopes,
-        'expiry':datetime.datetime.strftime(credentials.expiry,'%Y-%m-%d %H:%M:%S')
-    }
+        return {
+            'token': credentials.token,
+            'refresh_token': credentials.refresh_token,
+            'id_token': credentials.id_token,
+            'token_uri': credentials.token_uri,
+            'client_id': credentials.client_id,
+            'client_secret': credentials.client_secret,
+            'scopes': credentials.scopes,
+            'expiry': datetime.datetime.strftime(credentials.expiry, '%Y-%m-%d %H:%M:%S')
+        }
 
     try:
-        with open(AUTH_FILE) as data_file:    
+        with open(AUTH_FILE) as data_file:
             credentials_dict = json.load(data_file)
             del credentials_dict['expiry']
             credentials = google.oauth2.credentials.Credentials(**credentials_dict)
@@ -111,8 +110,8 @@ def get_authenticated_youtube_service():
         credentials = flow.run_console()
     with open(AUTH_FILE, 'w') as outfile:
         json.dump(yt_cred_to_dict(credentials), outfile)
-    
-    return build(API_SERVICE_NAME, API_VERSION, credentials = credentials)
+
+    return build(API_SERVICE_NAME, API_VERSION, credentials=credentials)
 
 
 def copy_todays_events():
@@ -136,16 +135,17 @@ def copy_todays_events():
     # Filter to streams in the next 7 days
     def soon(stream):
         delta = stream['scheduledStartTime'] - now
-        return delta > datetime.timedelta(minutes = 5) and delta < datetime.timedelta(days = 7)
-    
+        return delta > datetime.timedelta(minutes=5) and \
+            delta < datetime.timedelta(days=7)
+
     upcoming_streams = filter(soon, streams)
-    
+
     twitch_link = "https://www.twitch.tv/holdenkarau"
     # Update buffer posts
     buffer_clientid = os.getenv("BUFFER_CLIENTID")
     buffer_client_secret = os.getenv("BUFFER_CLIENT_SECRET")
     buffer_token = os.getenv("BUFFER_CODE")
-    
+
     buffer_api = bufferapp.API(
         client_id=buffer_clientid, client_secret=buffer_client_secret,
         access_token=buffer_token)
@@ -175,9 +175,7 @@ def copy_todays_events():
         def create_post_func(time_format_func, delta, format_string):
             def create_post(stream):
                 tweet_time = stream['scheduledStartTime'] - delta
-
                 media_img = stream['image_url']
-                
                 stream_time = time_format_func(stream['scheduledStartTime'])
 
                 full_text = format_string.format(
@@ -195,12 +193,11 @@ def copy_todays_events():
             else:
                 return time.strftime("%-I:%M%p")
 
-        
         create_join_in_less_than_an_hour = create_post_func(
             format_time_same_day,
             datetime.timedelta(minutes=random.randrange(40, 50, step=1)),
             "Join me in less than an hour @ {0} pacific for {1} on {2} @YouTube or {3} twitch")
-            
+
         def format_time_tomorrow(time):
             if time.minute == 0:
                 return time.strftime("%a %-I%p")
@@ -224,7 +221,7 @@ def copy_todays_events():
                 days=random.randrange(5, 7, step=1),
                 hours=random.randrange(20, 23, step=1),
                 minutes=random.randrange(0, 55, step=1)),
-                "Join me this {0} pacific for {1} on {2} @YouTube")
+            "Join me this {0} pacific for {1} on {2} @YouTube")
 
         return [create_join_in_less_than_an_hour(stream),
                 create_join_me_on_day_x(stream),
@@ -289,9 +286,10 @@ def copy_todays_events():
         def allready_published(post):
             return unicode(post[0]) in all_updates_text or \
                 (unicode(clean_odd_text(post[0])), unicode(post[3])) in all_updates_special
-        
+
         unpublished_posts = filter(
             lambda post: not allready_published(post), posts)
+
         updates = profile.updates
         for post in unpublished_posts:
             # Note: even though we set shorten the backend seems to use the
