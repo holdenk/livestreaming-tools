@@ -15,8 +15,10 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from twitch import TwitchClient
 from itertools import chain, imap
 
+
 def flatMap(f, items):
     return chain.from_iterable(imap(f, items))
+
 
 def unix_time_seconds(dt):
     epoch = pytz.UTC.localize(datetime.datetime.utcfromtimestamp(0))
@@ -173,7 +175,8 @@ def copy_todays_events():
         delta = stream['scheduledStartTime'] - now
         yt_link = stream['url']
         def create_join_in_less_than_an_hour(stream):
-            tweet_time = stream['scheduledStartTime'] -  datetime.timedelta(hours=0, minutes=50)
+            tweet_time = stream['scheduledStartTime'] - datetime.timedelta(hours=0, minutes=50)
+
             def format_time_same_day(time):
                 if time.minute == 0:
                     return time.strftime("%-I%p")
@@ -189,14 +192,15 @@ def copy_todays_events():
             return (full_text, short_text, tweet_time)
 
         def create_join_tomorrow(stream):
-            tweet_time = stream['scheduledStartTime'] -  datetime.timedelta(hours=23, minutes=55)
-            def format_time_same_day(time):
+            tweet_time = stream['scheduledStartTime'] - datetime.timedelta(hours=23, minutes=55)
+
+            def format_time_tomorrow(time):
                 if time.minute == 0:
                     return time.strftime("%a %-I%p")
                 else:
                     return time.strftime("%a %-I:%M%p")
 
-            stream_time = format_time_same_day(stream['scheduledStartTime'])
+            stream_time = format_time_tomorrow(stream['scheduledStartTime'])
 
             full_text = "Join me tomorrow @ {0} pacific for {1} on {2} or {3}".format(
                 stream_time, cleaned_title, yt_link, twitch_link)
@@ -205,14 +209,15 @@ def copy_todays_events():
             return (full_text, short_text, tweet_time)
 
         def create_join_me_on_day_x(stream):
-            tweet_time = stream['scheduledStartTime'] -  datetime.timedelta(days = 4, hours=23, minutes=55)
-            def format_time_same_day(time):
+            tweet_time = stream['scheduledStartTime'] - datetime.timedelta(days = 4, hours=23, minutes=55)
+
+            def format_time_future(time):
                 if time.minute == 0:
                     return time.strftime("%A %-I%p")
                 else:
                     return time.strftime("%A %-I:%M%p")
 
-            stream_time = format_time_same_day(stream['scheduledStartTime'])
+            stream_time = format_time_future(stream['scheduledStartTime'])
 
             full_text = "Join me this {0} pacific for {1} on {2} or {3}".format(
                 stream_time, cleaned_title, yt_link, twitch_link)
@@ -230,7 +235,7 @@ def copy_todays_events():
     def is_reasonable_time(post):
         delta_from_now = post[2] - now
         return delta_from_now < datetime.timedelta(hours=35, minutes=55) and \
-            delta_from_now >  datetime.timedelta(hours=-12)
+            delta_from_now > datetime.timedelta(hours=-12)
 
     desired_posts = filter(is_reasonable_time, possible_posts)
 
@@ -257,33 +262,37 @@ def copy_todays_events():
         all_updates = []
         all_updates.extend(pending)
         all_updates.extend(sent)
+
         # Get the raw text of the posts to de-duplicate
-        all_update_text = list(map(
-            lambda update: BeautifulSoup(update.text_formatted, features="html.parser").get_text(),
-            all_updates))
+        def extract_text_from_update(update):
+            return BeautifulSoup(
+                update.text_formatted,
+                features="html.parser").get_text()
+
+        all_update_text = list(map(extract_text_from_update, all_updates))
         print "Updated text:"
         print all_update_text
-        unpublished_posts = filter(lambda post: post[0] not in all_update_text, posts)
+        unpublished_posts = filter(
+            lambda post: post[0] not in all_update_text, posts)
         print "Unpublished posts:"
         print unpublished_posts
         updates = profile.updates
         for post in unpublished_posts:
+            # Note: even though we set shorten the backend seems to use the
+            # user's per-profile settings instead.
             if post[1] > now:
                 target_time_in_utc = post[1].astimezone(pytz.UTC)
-                updates.new(post[0], shorten = False,
-                            when = unix_time_seconds(target_time_in_utc))
+                updates.new(post[0], shorten=False,
+                            when=unix_time_seconds(target_time_in_utc))
             else:
-                updates.new(post[0], shorten = False,
-                            now = True)
-                
+                updates.new(post[0], shorten=False,
+                            now=True)
 
     for profile in profiles:
         post_as_needed_to_profile(profile)
 
-        
-
-
     def update_twitch():
+        """Update twitch. Broken until client lib switches to new API."""
         # Set up twitch posts
         twitch_client = TwitchClient(
             client_id=os.getenv("TWITCH_CLIENT_ID"),
@@ -292,12 +301,11 @@ def copy_todays_events():
         channel_id = channel_info.id
         print channel_id
         # Get existing updates
-        posts = twitch_client.channel_feed.get_posts(channel_id = channel_id, comments= None)
+        posts = twitch_client.channel_feed.get_posts(
+            channel_id=channel_id, comments=None)
         # Ugh this is deprecated now
         # TODO: Wait for twitch client to update to Helix API
 
 
-  
-    
 if __name__ == '__main__':
     copy_todays_events()
