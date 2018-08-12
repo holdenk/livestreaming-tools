@@ -2,7 +2,10 @@ import datetime
 import json
 import os
 import pytz
+import random
 import re
+import sets
+import sys
 import time
 
 import bufferapp
@@ -29,8 +32,6 @@ def unix_time_seconds(dt):
 # Retrieve a list of the liveStream resources associated with the currently
 # authenticated user's channel.
 def list_streams(youtube):
-  print 'Live streams:'
-
   list_streams_request = youtube.liveBroadcasts().list(
     part='id,snippet',
     mine=True,
@@ -138,11 +139,7 @@ def copy_todays_events():
         return delta > datetime.timedelta(minutes = 5) and delta < datetime.timedelta(days = 7)
     
     upcoming_streams = filter(soon, streams)
-    for stream in upcoming_streams:
-        print(stream)
     
-    
-    print "Buffer posts:"
     twitch_link = "https://www.twitch.tv/holdenkarau"
     # Update buffer posts
     buffer_clientid = os.getenv("BUFFER_CLIENTID")
@@ -174,56 +171,60 @@ def copy_todays_events():
         # Compute how far out this event is
         delta = stream['scheduledStartTime'] - now
         yt_link = stream['url']
-        def create_join_in_less_than_an_hour(stream):
-            tweet_time = stream['scheduledStartTime'] - datetime.timedelta(hours=0, minutes=50)
 
-            def format_time_same_day(time):
-                if time.minute == 0:
-                    return time.strftime("%-I%p")
-                else:
-                    return time.strftime("%-I:%M%p")
+        def create_post_func(time_format_func, delta, format_string):
+            def create_post(stream):
+                tweet_time = stream['scheduledStartTime'] - delta
 
-            stream_time = format_time_same_day(stream['scheduledStartTime'])
+                media_img = stream['image_url']
+                
+                stream_time = time_format_func(stream['scheduledStartTime'])
 
-            full_text = "Join me in less than an hour @ {0} pacific for {1} on {2} or {3}".format(
-                stream_time, cleaned_title, yt_link, twitch_link)
-            short_text = "Join me in less than an hour @ {0} pacific for {1} - {2} or {3}".format(
-                stream_time, short_title, yt_link, twitch_link)
-            return (full_text, short_text, tweet_time)
+                full_text = format_string.format(
+                    stream_time, cleaned_title, yt_link, twitch_link)
+                short_text = format_string.format(
+                    stream_time, short_title, yt_link, twitch_link)
+                return (full_text, short_text, tweet_time, media_img, yt_link,
+                        stream_title)
 
-        def create_join_tomorrow(stream):
-            tweet_time = stream['scheduledStartTime'] - datetime.timedelta(hours=23, minutes=55)
+            return create_post
 
-            def format_time_tomorrow(time):
-                if time.minute == 0:
-                    return time.strftime("%a %-I%p")
-                else:
-                    return time.strftime("%a %-I:%M%p")
+        def format_time_same_day(time):
+            if time.minute == 0:
+                return time.strftime("%-I%p")
+            else:
+                return time.strftime("%-I:%M%p")
 
-            stream_time = format_time_tomorrow(stream['scheduledStartTime'])
+        
+        create_join_in_less_than_an_hour = create_post_func(
+            format_time_same_day,
+            datetime.timedelta(minutes=random.randrange(40, 50, step=1)),
+            "Join me in less than an hour @ {0} pacific for {1} on {2} @YouTube or {3} twitch")
+            
+        def format_time_tomorrow(time):
+            if time.minute == 0:
+                return time.strftime("%a %-I%p")
+            else:
+                return time.strftime("%a %-I:%M%p")
 
-            full_text = "Join me tomorrow @ {0} pacific for {1} on {2} or {3}".format(
-                stream_time, cleaned_title, yt_link, twitch_link)
-            short_text = "Join me tomorrow @ {0} pacific for {1} - {2} or {3}".format(
-                stream_time, short_title, yt_link, twitch_link)
-            return (full_text, short_text, tweet_time)
+        create_join_tomorrow = create_post_func(
+            format_time_tomorrow,
+            datetime.timedelta(hours=23, minutes=55),
+            "Join me tomorrow @ {0} pacific for {1} on {2} @YouTube")
 
-        def create_join_me_on_day_x(stream):
-            tweet_time = stream['scheduledStartTime'] - datetime.timedelta(days = 4, hours=23, minutes=55)
+        def format_time_future(time):
+            if time.minute == 0:
+                return time.strftime("%A %-I%p")
+            else:
+                return time.strftime("%A %-I:%M%p")
 
-            def format_time_future(time):
-                if time.minute == 0:
-                    return time.strftime("%A %-I%p")
-                else:
-                    return time.strftime("%A %-I:%M%p")
-
-            stream_time = format_time_future(stream['scheduledStartTime'])
-
-            full_text = "Join me this {0} pacific for {1} on {2} or {3}".format(
-                stream_time, cleaned_title, yt_link, twitch_link)
-            short_text = "Join me this {0} pacific for {1} - {2} or {3}".format(
-                stream_time, short_title, yt_link, twitch_link)
-            return (full_text, short_text, tweet_time)
+        create_join_me_on_day_x = create_post_func(
+            format_time_future,
+            datetime.timedelta(
+                days=random.randrange(5, 7, step=1),
+                hours=random.randrange(20, 23, step=1),
+                minutes=random.randrange(0, 55, step=1)),
+                "Join me this {0} pacific for {1} on {2} @YouTube")
 
         return [create_join_in_less_than_an_hour(stream),
                 create_join_me_on_day_x(stream),
@@ -240,53 +241,74 @@ def copy_todays_events():
     desired_posts = filter(is_reasonable_time, possible_posts)
 
     def post_as_needed_to_profile(profile):
-        print "Profile:"
-        print profile
-        print "id:"
-        print profile.id
-        print "type:"
-        print profile.formatted_service
         # Special case twitter for short text
         posts = []
         if profile.formatted_service == "Twitter":
-            posts = map(lambda post: (post[1], post[2]), desired_posts)
+            posts = map(lambda post: (post[1], post[2], post[3], post[4], post[5]),
+                        desired_posts)
         else:
-            posts = map(lambda post: (post[0], post[2]), desired_posts)
+            posts = map(lambda post: (post[0], post[2], post[3], post[4], post[5]),
+                        desired_posts)
         updates = profile.updates
         pending = updates.pending
         sent = updates.sent
-        print "Pending"
-        print pending
-        print "Sent"
-        print sent
         all_updates = []
         all_updates.extend(pending)
         all_updates.extend(sent)
 
         # Get the raw text of the posts to de-duplicate
         def extract_text_from_update(update):
-            return BeautifulSoup(
+            return unicode(BeautifulSoup(
+                update.text_formatted,
+                features="html.parser").get_text())
+
+        # Allow comparison after munging
+        def clean_odd_text(text):
+            text = re.sub("http(s|)://[^\s]+", "", text)
+            # media tag
+            text = text.replace(u"\xa0\xa0", "")
+            # Spaces get screwy :(
+            text = text.replace(" ", "")
+            return text
+
+        # Get the text and link
+        def extract_special(update):
+            text = BeautifulSoup(
                 update.text_formatted,
                 features="html.parser").get_text()
+            text = clean_odd_text(text)
+            media_link = None
+            if hasattr(update, "media"):
+                media_link = update.media.get("link", None)
+            return (unicode(text), unicode(media_link))
 
-        all_update_text = list(map(extract_text_from_update, all_updates))
-        print "Updated text:"
-        print all_update_text
+        all_updates_text = sets.Set(map(extract_text_from_update, all_updates))
+        # Kind of a hack cause of how media links is handled
+        all_updates_special = sets.Set(map(extract_special, all_updates))
+
+        def allready_published(post):
+            return unicode(post[0]) in all_updates_text or \
+                (unicode(clean_odd_text(post[0])), unicode(post[3])) in all_updates_special
+        
         unpublished_posts = filter(
-            lambda post: post[0] not in all_update_text, posts)
-        print "Unpublished posts:"
-        print unpublished_posts
+            lambda post: not allready_published(post), posts)
         updates = profile.updates
         for post in unpublished_posts:
             # Note: even though we set shorten the backend seems to use the
             # user's per-profile settings instead.
-            if post[1] > now:
-                target_time_in_utc = post[1].astimezone(pytz.UTC)
-                updates.new(post[0], shorten=False,
-                            when=unix_time_seconds(target_time_in_utc))
-            else:
-                updates.new(post[0], shorten=False,
-                            now=True)
+            media = {"thumbnail": post[2], "link": post[3], "picture": post[2],
+                     "description": post[4]}
+            try:
+                if post[1] > now:
+                    target_time_in_utc = post[1].astimezone(pytz.UTC)
+                    updates.new(post[0], shorten=False, media=media,
+                                when=unix_time_seconds(target_time_in_utc))
+                else:
+                    updates.new(post[0], shorten=False,
+                                now=True)
+            except:
+                print "Skipping update"
+                print post
 
     for profile in profiles:
         post_as_needed_to_profile(profile)
