@@ -16,6 +16,7 @@ setup(
         'python-twitch-client',
         'pytz',
         'bufferapp',
+        'BeautifulSoup4',
     ],
     test_requires=[
         'nose==1.3.7',
