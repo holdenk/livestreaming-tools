@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import datetime
 import json
 import os
@@ -116,10 +118,12 @@ def get_authenticated_youtube_service():
 
 def copy_todays_events():
     # Fetch youtube streams
+    print("Fetching YouTube streams...")
     youtube = get_authenticated_youtube_service()
     streams = list_streams(youtube)
     # Get a noew in pacific time we can use for scheduling and testing
     # Assumes system time is in pacific or UTC , which holds true on my home computer :p
+    print("Processing streams...")
     now = datetime.datetime.now()
     timezone = pytz.timezone('US/Pacific')
     if "PST" in time.tzname:
@@ -142,6 +146,7 @@ def copy_todays_events():
 
     twitch_link = "https://www.twitch.tv/holdenkarau"
     # Update buffer posts
+    print("Updating posts...")
     buffer_clientid = os.getenv("BUFFER_CLIENTID")
     buffer_client_secret = os.getenv("BUFFER_CLIENT_SECRET")
     buffer_token = os.getenv("BUFFER_CODE")
@@ -166,6 +171,8 @@ def copy_todays_events():
             .replace("Apache (Incubating) Airflow", "@ApacheAirflow") \
             .replace("Apache Airflow", "@ApacheAirflow") \
             .replace("Apache Beam", "@ApacheBeam")
+        short_title = re.sub(" [sS]cala(\.| |\,)", r"@scala_lang\1", short_title)
+        short_title = re.sub("^[sS]cala(\.| |\,)", r"@scala_lang\1", short_title)
         if len(short_title) > 150:
             short_title = cleaned_title[:150] + "..."
         # Compute how far out this event is
@@ -305,8 +312,8 @@ def copy_todays_events():
                     updates.new(post[0], shorten=False,
                                 now=True)
             except:
-                print "Skipping update"
-                print post
+                print("Skipping update")
+                print(post)
 
     for profile in profiles:
         post_as_needed_to_profile(profile)
@@ -319,7 +326,7 @@ def copy_todays_events():
             oauth_token=os.getenv("TWITCH_OAUTH"))
         channel_info = twitch_client.channels.get()
         channel_id = channel_info.id
-        print channel_id
+        print(channel_id)
         # Get existing updates
         posts = twitch_client.channel_feed.get_posts(
             channel_id=channel_id, comments=None)
