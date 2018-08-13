@@ -45,29 +45,29 @@ def list_streams(youtube):
     while list_streams_request:
         list_streams_response = list_streams_request.execute()
 
-    def extract_information(stream):
-        parsed_time = datetime.datetime.strptime(
-            str(stream['snippet']['scheduledStartTime']),
-            '%Y-%m-%dT%H:%M:%S.000Z')
-        parsed_time = parsed_time.replace(tzinfo=pytz.UTC)
-        timezone = pytz.timezone('US/Pacific')
-        parsed_time = parsed_time.astimezone(timezone)
-        return {
-            "title": stream['snippet']['title'],
-            "description": stream['snippet']['description'],
-            "id": stream['id'],
-            "url": "https://www.youtube.com/watch?v={0}".format(stream['id']),
-            "scheduledStartTime": parsed_time,
-            "image_url": stream['snippet']['thumbnails']['medium']['url']}
+        def extract_information(stream):
+            parsed_time = datetime.datetime.strptime(
+                str(stream['snippet']['scheduledStartTime']),
+                '%Y-%m-%dT%H:%M:%S.000Z')
+            parsed_time = parsed_time.replace(tzinfo=pytz.UTC)
+            timezone = pytz.timezone('US/Pacific')
+            parsed_time = parsed_time.astimezone(timezone)
+            return {
+                "title": stream['snippet']['title'],
+                "description": stream['snippet']['description'],
+                "id": stream['id'],
+                "url": "https://www.youtube.com/watch?v={0}".format(stream['id']),
+                "scheduledStartTime": parsed_time,
+                "image_url": stream['snippet']['thumbnails']['medium']['url']}
 
-    responses = list_streams_response.get('items', [])
-    future_streams = filter(
-        lambda response: "actualEndTime" not in response["snippet"], responses)
-    extracted_values = map(extract_information, future_streams)
-    results.extend(extracted_values)
+        responses = list_streams_response.get('items', [])
+        future_streams = filter(
+            lambda response: "actualEndTime" not in response["snippet"], responses)
+        extracted_values = map(extract_information, future_streams)
+        results.extend(extracted_values)
 
-    list_streams_request = youtube.liveStreams().list_next(
-      list_streams_request, list_streams_response)
+        list_streams_request = youtube.liveStreams().list_next(
+            list_streams_request, list_streams_response)
 
     return results
 
@@ -97,13 +97,16 @@ def get_authenticated_youtube_service():
 
     try:
         with open(AUTH_FILE) as data_file:
+            print("Loading credentials")
             credentials_dict = json.load(data_file)
             del credentials_dict['expiry']
             credentials = google.oauth2.credentials.Credentials(**credentials_dict)
             request = google.auth.transport.requests.Request()
             credentials.refresh(request)
             if not credentials.valid:
+                print("Credentials aren't valid, trying to refresh...")
                 raise Exception("I'm sad, creds aren't happy")
+            print("Using saved credentials")
     except:
         flow = InstalledAppFlow.from_client_secrets_file(
                                 CLIENT_SECRETS_FILE,
@@ -113,7 +116,9 @@ def get_authenticated_youtube_service():
     with open(AUTH_FILE, 'w') as outfile:
         json.dump(yt_cred_to_dict(credentials), outfile)
 
-    return build(API_SERVICE_NAME, API_VERSION, credentials=credentials)
+    service = build(API_SERVICE_NAME, API_VERSION, credentials=credentials)
+    print("Done authenticating")
+    return service
 
 
 def copy_todays_events():
@@ -173,6 +178,9 @@ def copy_todays_events():
             .replace("Apache Beam", "@ApacheBeam")
         short_title = re.sub(" [sS]cala(\.| |\,)", r"@scala_lang\1", short_title)
         short_title = re.sub("^[sS]cala(\.| |\,)", r"@scala_lang\1", short_title)
+        short_title = re.sub("[jJ]upyter( |)[cC]on", "@JupyterCon", short_title)
+        short_title = re.sub("[sS]trata( |)[cC]onf", "@strataconf", short_title)
+        short_title = short_title.replace("@@", "@")
         if len(short_title) > 150:
             short_title = cleaned_title[:150] + "..."
         # Compute how far out this event is
