@@ -176,7 +176,9 @@ def copy_todays_events():
             .replace("Apache Airflow (Incubating)", "@ApacheAirflow") \
             .replace("Apache (Incubating) Airflow", "@ApacheAirflow") \
             .replace("Apache Airflow", "@ApacheAirflow") \
-            .replace("Apache Beam", "@ApacheBeam")
+            .replace("Apache Beam", "@ApacheBeam") \
+            .replace("Kubernetes", "@kubernetesio") \
+            .replace("Apache Arrow", "@ApacheArrow")
         short_title = re.sub(" [sS]cala(\.| |\,)", r"@scala_lang\1", short_title)
         short_title = re.sub("^[sS]cala(\.| |\,)", r"@scala_lang\1", short_title)
         short_title = re.sub("[jJ]upyter( |)[cC]on", "@JupyterCon", short_title)
