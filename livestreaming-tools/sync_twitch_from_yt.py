@@ -1,3 +1,4 @@
+#!/home/hkarau/repos/livestreaming-tools/myvenv/bin/python
 from __future__ import print_function
 
 import datetime
@@ -171,7 +172,7 @@ def copy_todays_events():
         # Cut the text for twitter if needed
         short_title = cleaned_title
         # swap in at mentions on twitter
-        short_tile = short_title.replace("Apache Spark", "@ApacheSpark") \
+        short_title = short_title.replace("Apache Spark", "@ApacheSpark") \
             .replace("Apache Airflow (Incubating)", "@ApacheAirflow") \
             .replace("Apache (Incubating) Airflow", "@ApacheAirflow") \
             .replace("Apache Airflow", "@ApacheAirflow") \
@@ -192,11 +193,14 @@ def copy_todays_events():
                 tweet_time = stream['scheduledStartTime'] - delta
                 media_img = stream['image_url']
                 stream_time = time_format_func(stream['scheduledStartTime'])
+                coming = ""
+                if stream['scheduledStartTime'].isocalendar()[1] != tweet_time.isocalendar()[1]:
+                    coming = " coming "
 
                 full_text = format_string.format(
-                    stream_time, cleaned_title, yt_link, twitch_link)
+                    stream_time, cleaned_title, yt_link, twitch_link, coming)
                 short_text = format_string.format(
-                    stream_time, short_title, yt_link, twitch_link)
+                    stream_time, short_title, yt_link, twitch_link, coming)
                 return (full_text, short_text, tweet_time, media_img, yt_link,
                         stream_title)
 
@@ -210,7 +214,7 @@ def copy_todays_events():
 
         create_join_in_less_than_an_hour = create_post_func(
             format_time_same_day,
-            datetime.timedelta(minutes=random.randrange(40, 50, step=1)),
+            datetime.timedelta(minutes=random.randrange(39, 55, step=1)),
             "Join me in less than an hour @ {0} pacific for {1} on {2} @YouTube or {3} twitch")
 
         def format_time_tomorrow(time):
@@ -226,17 +230,17 @@ def copy_todays_events():
 
         def format_time_future(time):
             if time.minute == 0:
-                return time.strftime("%A %-I%p")
+                return time.strftime("%A @ %-I%p")
             else:
-                return time.strftime("%A %-I:%M%p")
+                return time.strftime("%A @ %-I:%M%p")
 
         create_join_me_on_day_x = create_post_func(
             format_time_future,
             datetime.timedelta(
-                days=random.randrange(5, 7, step=1),
-                hours=random.randrange(20, 23, step=1),
+                days=5,
+                hours=random.randrange(20, 24, step=1),
                 minutes=random.randrange(0, 55, step=1)),
-            "Join me this {0} pacific for {1} on {2} @YouTube")
+            "Join me this{4} {0} pacific for {1} on {2} @YouTube")
 
         return [create_join_in_less_than_an_hour(stream),
                 create_join_me_on_day_x(stream),
@@ -247,15 +251,16 @@ def copy_todays_events():
     # Only schedule posts in < 36 hours and < - 12 hours
     def is_reasonable_time(post):
         delta_from_now = post[2] - now
-        return delta_from_now < datetime.timedelta(hours=35, minutes=55) and \
-            delta_from_now > datetime.timedelta(hours=-12)
+        return delta_from_now < datetime.timedelta(hours=25, minutes=55) and \
+            delta_from_now > datetime.timedelta(days=-5)
 
     desired_posts = filter(is_reasonable_time, possible_posts)
 
     def post_as_needed_to_profile(profile):
         # Special case twitter for short text
         posts = []
-        if profile.formatted_service == "Twitter":
+        print(profile.formatted_service)
+        if profile.formatted_service == u"Twitter":
             posts = map(lambda post: (post[1], post[2], post[3], post[4], post[5]),
                         desired_posts)
         else:
@@ -281,7 +286,7 @@ def copy_todays_events():
             text = text.replace(u"\xa0\xa0", "")
             # Spaces get screwy :(
             text = text.replace(" ", "")
-            return text
+            return text.lower()
 
         # Get the text and link
         def extract_special(update):
@@ -304,6 +309,9 @@ def copy_todays_events():
 
         unpublished_posts = filter(
             lambda post: not allready_published(post), posts)
+
+        print("Prepairing to update with new posts:")
+        print(unpublished_posts)
 
         updates = profile.updates
         for post in unpublished_posts:
