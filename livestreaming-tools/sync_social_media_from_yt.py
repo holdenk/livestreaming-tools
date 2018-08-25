@@ -4,6 +4,7 @@ from __future__ import print_function
 import datetime
 import json
 import os
+from os.path import expanduser
 import pytz
 import random
 import re
@@ -81,7 +82,9 @@ def get_authenticated_youtube_service():
     API_SERVICE_NAME = 'youtube'
     API_VERSION = 'v3'
     CLIENT_SECRETS_FILE = os.getenv("GOOGLE_CLIENT_SECRET")
-    AUTH_FILE = os.getenv("G_AUTH_FILE", "g_yt_auth_file")
+    AUTH_FILE = os.getenv(
+        "G_AUTH_FILE",
+        "{0}/g_yt_auth_file".format(expanduser("~")))
 
     def yt_cred_to_dict(credentials):
         """Convert the credentials into a form we can serialize."""
@@ -179,7 +182,7 @@ def copy_todays_events():
             .replace("Apache Beam", "@ApacheBeam") \
             .replace("Kubernetes", "@kubernetesio") \
             .replace("Apache Arrow", "@ApacheArrow")
-        short_title = re.sub(" [sS]cala(\.| |\,)", r"@scala_lang\1", short_title)
+        short_title = re.sub(" [sS]cala(\.| |\,)", r" @scala_lang\1", short_title)
         short_title = re.sub("^[sS]cala(\.| |\,)", r"@scala_lang\1", short_title)
         short_title = re.sub("[jJ]upyter( |)[cC]on", "@JupyterCon", short_title)
         short_title = re.sub("[sS]trata( |)[cC]onf", "@strataconf", short_title)
