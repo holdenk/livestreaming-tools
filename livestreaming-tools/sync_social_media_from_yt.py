@@ -166,6 +166,9 @@ def copy_todays_events():
     user = bufferapp.User(api=buffer_api)
     profiles = bufferapp.Profiles(api=buffer_api).all()
 
+    # TODO(holden): Import talks from a special calendar
+    # TODO(holden): Create a meta post of the weeks events
+
     def format_posts(stream):
         """Create posts for a given stream.
         Returns the short text, long text, and  tuple of schedule time."""
@@ -247,9 +250,14 @@ def copy_todays_events():
                 minutes=random.randrange(0, 55, step=1)),
             "Join me this{4} {0} pacific for {1} on {2} @YouTube")
 
-        return [create_join_in_less_than_an_hour(stream),
-                create_join_me_on_day_x(stream),
-                create_join_tomorrow(stream)]
+        if stream['scheduledStartTime'].day == now.day:
+            # Special case stream on the same day
+            return [create_join_in_less_than_an_hour(stream)]
+        else:
+            # All possible posts leave it up to scheduler
+            return [create_join_in_less_than_an_hour(stream),
+                    create_join_me_on_day_x(stream),
+                    create_join_tomorrow(stream)]
 
     possible_posts = flatMap(format_posts, streams)
 
