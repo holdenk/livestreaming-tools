@@ -125,26 +125,7 @@ def get_authenticated_youtube_service():
     return service
 
 
-def copy_todays_events():
-    # Fetch youtube streams
-    print("Fetching YouTube streams...")
-    youtube = get_authenticated_youtube_service()
-    streams = list_streams(youtube)
-    # Get a noew in pacific time we can use for scheduling and testing
-    # Assumes system time is in pacific or UTC , which holds true on my home computer :p
-    print("Processing streams...")
-    now = datetime.datetime.now()
-    timezone = pytz.timezone('US/Pacific')
-    if "PST" in time.tzname:
-        # current timezone is pacific
-        now = timezone.localize(now)
-    elif "UTC" in time.tznames:
-        # current timezone is UTC
-        now = pytz.UTC.localize(now)
-    else:
-        raise Exception("ugh timezones.")
-    now = now.astimezone(timezone)
-
+def copy_todays_events(now, streams):
     # Filter to streams in the next 7 days
     def soon(stream):
         delta = stream['scheduledStartTime'] - now
@@ -259,7 +240,7 @@ def copy_todays_events():
                     create_join_me_on_day_x(stream),
                     create_join_tomorrow(stream)]
 
-    possible_posts = flatMap(format_posts, streams)
+    possible_posts = flatMap(format_posts, upcoming_streams)
 
     # Only schedule posts in < 36 hours and < - 12 hours
     def is_reasonable_time(post):
@@ -363,5 +344,59 @@ def copy_todays_events():
         # TODO: Wait for twitch client to update to Helix API
 
 
+def update_stream_header(now, streams):
+    """Update review_info.txt to the next scheduled stream."""
+    todays_streams = list(
+        filter(lambda stream: stream['scheduledStartTime'].date() == now.date(), streams))
+
+    def write_header_for_stream(stream):
+        print("Updating header for stream {0}".format(stream))
+        review_header_name = "{0}/review_info.txt".format(expanduser("~"))
+        with open(review_header_name, 'w') as f:
+            f.write(stream['title'])
+
+    if len(todays_streams) == 0:
+        return
+    elif len(todays_streams) == 1:
+        write_header_for_stream(todays_streams[0])
+    else:
+        def stream_is_soon(stream):
+            delta = stream['scheduledStartTime'] - now
+            return delta < datetime.timedelta(minutes=30) and delta > datetime.timedelta(minutes=-5)
+
+        possible_stream = list(filter(stream_is_soon, stream))
+        if possible_stream is None:
+            return
+        else:
+            write_header_for_stream(possible_stream[0])
+
+
+def get_streams():
+    """Fetch upcoming youtube streams."""
+    # Fetch youtube streams
+    print("Fetching YouTube streams...")
+    youtube = get_authenticated_youtube_service()
+    streams = list_streams(youtube)
+    # Get a noew in pacific time we can use for scheduling and testing
+    # Assumes system time is in pacific or UTC , which holds true on my home computer :p
+    return streams
+
+
 if __name__ == '__main__':
-    copy_todays_events()
+    streams = get_streams()
+    now = datetime.datetime.now()
+
+    # Try and work on both my computer and my server. Timezones :(
+    timezone = pytz.timezone('US/Pacific')
+    if "PST" in time.tzname:
+        # current timezone is pacific
+        now = timezone.localize(now)
+    elif "UTC" in time.tznames:
+        # current timezone is UTC
+        now = pytz.UTC.localize(now)
+    else:
+        raise Exception("ugh timezones.")
+
+    now = now.astimezone(timezone)
+    update_stream_header(now, streams)
+    copy_todays_events(now, streams)
