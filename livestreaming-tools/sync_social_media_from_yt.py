@@ -14,6 +14,7 @@ import time
 
 import bufferapp
 from bs4 import BeautifulSoup
+import bitly_api
 import google.oauth2.credentials
 import google_auth_oauthlib.flow
 from googleapiclient.discovery import build
@@ -21,7 +22,7 @@ from googleapiclient.errors import HttpError
 from google_auth_oauthlib.flow import InstalledAppFlow
 from twitch import TwitchClient
 from itertools import chain, imap
-
+import memoized
 
 def flatMap(f, items):
     return chain.from_iterable(imap(f, items))
@@ -157,17 +158,8 @@ def copy_todays_events(now, events, streams):
     # TODO(holden): Import talks from a special calendar
     # TODO(holden): Create a meta post of the weeks events
 
-    def format_event_post(event):
-        """Create posts for a given event."""
-        # TODO(holden): Format the event post
-        return []
-
-    def format_stream_post(stream):
-        """Create posts for a given stream.
-        Returns the short text, long text, and  tuple of schedule time."""
-        # Munge the text to fit within our sentence structure
-        stream_title = stream['title']
-        cleaned_title = stream_title[:1].lower() + stream_title[1:]
+    def cleanup_event_title(title):
+        cleaned_title = title[:1].lower() + title[1:]
         # Cut the text for twitter if needed
         short_title = cleaned_title
         # swap in at mentions on twitter
@@ -185,6 +177,117 @@ def copy_todays_events(now, events, streams):
         short_title = short_title.replace("@@", "@")
         if len(short_title) > 150:
             short_title = cleaned_title[:150] + "..."
+        return (cleaned_title, short_title)
+
+    def format_event_post(event):
+        """Create posts for a given event."""
+        # TODO(holden): Format the event post
+        title, short_title = cleanup_event_title(event['title'])
+        city_name = None
+        if event['location'] is not None:
+            city_name = event['location']
+            if "," in city_name:
+                city_name = city_name.split(",")[0]
+
+        # Add the tags field with a space so it doesn't join the link
+        tag_text = ""
+        if 'tags' in event:
+            tag_text = " / {0}".format(event['tags'])
+
+        # We handle future events & past events differently
+        def format_future(format_time_func, delta):
+            hey_friends = ""
+            if city_name is not None:
+                hey_friends = "Hey {0} friends, ".format(city_name)
+            # Figure out the join on text
+            join_on = "join me"
+            if 'event_name' in event:
+                event_name = event['event_name']
+                # For event names that are twitter handles don't dupe the @
+                if "@" in event_name:
+                    join_on = "join me {0} ".format(event['event_name'])
+                else:
+                    join_on = "join me @ {0} ".format(event['event_name'])
+            # We always have a time...
+            join_at = " @ {0} ".format(format_time_func(event['start']))
+            link_text = ""
+            if event['talk_link'] is not None:
+                link_text = " {0}".format(event['talk_link'])
+            
+            full_text = "{0}{1}{2} for {3}{4}".format(
+                hey_friends, join_on, join_at, title, link_text)
+            short_text = "{0}{1}{2} for {3}{4}{5}".format(
+                hey_friends, join_on, join_at, short_title, link_text, tag_text)
+
+            # tweet lenght fall back
+            if len(short_text) > 250:
+                short_string = "{0}{1}{2}{3}".format(
+                    join_on, join_at, short_title, link_text)
+
+            return (full_text, short_text, event['start'] - delta,
+                    None, event['talk_link'], short_title)
+
+        def format_past():
+            if event['slides_link'] and events['video_link']:
+                full_text = "Slides and video now up from {0} at {1} and {2}".format(
+                    title, event['slides_link'], event['video_link'])
+                short_text = "Slides and video now up from {0} at {1} and {2}{3}".format(
+                    short_title, event['slides_link'], event['video_link'], tag_text)
+                if len(short_text) > 230:
+                    short_text = "Slides & video from {0} at {1} and {2}".format(
+                        short_title, event['slides_link'], event['video_link'])
+                return (full_text, short_text, None, None, None, event['video_link'], short_title)
+            # TODO(holden): Add a function to check if the slides have been linked on video.
+            elif event['slides_link']:
+                full_text = "Slides now up from {0} at {1} :)".format(
+                    title, event['slides_link'])
+                short_text = "Slides now up from {0} at {1}{2}:)".format(
+                    short_title, event['slides_link'], tag_text)
+                if len(short_text) > 230:
+                    short_text = "Slides from {0} @ {1}".format(
+                        short_title, event['slides_link'], event['slides_link'])
+                return (full_text, short_text, None, None, None, event['slides_link'], short_title)
+            else:
+                return None
+
+        if event['start'] > now:
+            # Post for join me today
+            def format_time_join_me_today(time):
+                if time.minute == 0:
+                    return time.strftime("today @ %-I%p")
+                else:
+                    return time.strftime("today @ %-I:%M%p")
+
+            todaydelta = datetime.timedelta(hours=4, minutes=55)
+            today_post = format_future(format_time_join_me_today, todaydelta)
+            # Skip everything else if we're already at today
+            if event['start'].date() == now.date():
+                return [today_post]
+
+            # Post for join me this week
+            def format_time_join_me_this_week(time):
+                if time.minute == 0:
+                    return time.strftime("%A @ %-I%p")
+                else:
+                    return time.strftime("%A @ %-I:%M%p")
+
+            thisweekdelta = datetime.timedelta(days=5, minutes=55)
+            this_week = format_future(format_time_join_me_this_week, thisweekdelta)
+
+            return [today_post, this_week]
+        else:
+            past = format_past()
+            if past:
+                return [past]
+            else:
+                return None
+        
+
+    def format_stream_post(stream):
+        """Create posts for a given stream.
+        Returns the short text, long text, and  tuple of schedule time."""
+        # Munge the text to fit within our sentence structure
+        cleaned_title, short_title = cleanup_event_title(stream['title'])
         # Compute how far out this event is
         delta = stream['scheduledStartTime'] - now
         yt_link = stream['url']
@@ -196,14 +299,14 @@ def copy_todays_events(now, events, streams):
                 stream_time = time_format_func(stream['scheduledStartTime'])
                 coming = ""
                 if stream['scheduledStartTime'].isocalendar()[1] != tweet_time.isocalendar()[1]:
-                    coming = " coming "
+                    coming = " coming"
 
                 full_text = format_string.format(
                     stream_time, cleaned_title, yt_link, twitch_link, coming)
                 short_text = format_string.format(
                     stream_time, short_title, yt_link, twitch_link, coming)
                 return (full_text, short_text, tweet_time, media_img, yt_link,
-                        stream_title)
+                        cleaned_title)
 
             return create_post
 
@@ -293,10 +396,18 @@ def copy_todays_events(now, events, streams):
         # Allow comparison after munging
         def clean_odd_text(text):
             text = re.sub("http(s|)://[^\s]+", "", text)
+            return mini_clean_text(text)
+
+        def mini_clean_text(text):
             # media tag
             text = text.replace(u"\xa0\xa0", "")
             # Spaces get screwy :(
             text = text.replace(" ", "")
+            # And +s...
+            text = text.replace("+", "")
+            # Something something &nbsp;
+            text = text.replace("\t", "")
+            text = text.replace("&nbsp;", "")
             return text.lower()
 
         # Get the text and link
@@ -311,11 +422,14 @@ def copy_todays_events(now, events, streams):
             return (unicode(text), unicode(media_link))
 
         all_updates_text = sets.Set(map(extract_text_from_update, all_updates))
+        all_updates_partial_text = sets.Set(
+            map(mini_clean_text, map(extract_text_from_update, all_updates)))
         # Kind of a hack cause of how media links is handled
         all_updates_special = sets.Set(map(extract_special, all_updates))
 
         def allready_published(post):
             return unicode(post[0]) in all_updates_text or \
+                unicode(mini_clean_text(post[0])) in all_updates_partial_text or \
                 (unicode(clean_odd_text(post[0])), unicode(post[3])) in all_updates_special
 
         unpublished_posts = filter(
@@ -328,8 +442,10 @@ def copy_todays_events(now, events, streams):
         for post in unpublished_posts:
             # Note: even though we set shorten the backend seems to use the
             # user's per-profile settings instead.
-            media = {"thumbnail": post[2], "link": post[3], "picture": post[2],
-                     "description": post[4]}
+            media = None
+            if post[2] is not None:
+                        media = {"thumbnail": post[2], "link": post[3], "picture": post[2],
+                                 "description": post[4]}
             try:
                 if post[1] > now:
                     target_time_in_utc = post[1].astimezone(pytz.UTC)
@@ -398,6 +514,17 @@ def get_streams(yt_service):
     return streams
 
 
+@memoized.memoized
+def shortten(link):
+    """Shortten a link if it is provided."""
+    if link is None:
+        return None
+    token = os.getenv("BITLY_TOKEN")
+    bitly = bitly_api.Connection(access_token=token)
+    data = bitly.shorten(link)
+    return data['url']
+
+
 def get_events(cal_service):
     """Fetch calendar events"""
     # Todo(later): unhardcode this if other folks want to use it
@@ -410,12 +537,27 @@ def get_events(cal_service):
         """Extract useful fields from the event."""
         from dateutil import parser
         parsed_time = parser.parse(str(event['start']['dateTime']))
+        import yaml
+        parsed_description = dict(yaml.load(event['description']))
+        print(parsed_description)
+        parsed_description.get('talk_link', None)
+        talk_link = shortten(parsed_description.get('talk_link', None))
+        slides_link = shortten(parsed_description.get('slides_link', None))
+        video_link = shortten(parsed_description.get('video_link', None))
+        tags = parsed_description.get('tags', None)
+        event_name = parsed_description.get('event_name', None)
 
         return {
             "start": parsed_time,
             "location": event['location'],
             "title": event['summary'],
-            "description": event['description']}
+            "description": event['description'],
+            "parsed": parsed_description,
+            "talk_link": talk_link,
+            "slides_link": slides_link,
+            "tags": tags,
+            "event_name": event_name,
+            "video_link": video_link}
 
     events = events_result.get('items', [])
     return map(post_process_event, events)
