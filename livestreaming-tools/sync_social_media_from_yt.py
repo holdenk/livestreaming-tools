@@ -75,16 +75,15 @@ def list_streams(youtube):
 
 
 # Authorize the request and store authorization credentials.
-def get_authenticated_youtube_service():
+def get_authenticated_google_services():
     # This OAuth 2.0 access scope allows for read-only access to the authenticated
     # user's account, but not other types of account access.
-    SCOPES = ['https://www.googleapis.com/auth/youtube.readonly']
-    API_SERVICE_NAME = 'youtube'
-    API_VERSION = 'v3'
+    SCOPES = ['https://www.googleapis.com/auth/youtube.readonly',
+              'https://www.googleapis.com/auth/calendar.readonly']
     CLIENT_SECRETS_FILE = os.getenv("GOOGLE_CLIENT_SECRET")
     AUTH_FILE = os.getenv(
         "G_AUTH_FILE",
-        "{0}/g_yt_auth_file".format(expanduser("~")))
+        "{0}/g_auth_file".format(expanduser("~")))
 
     def yt_cred_to_dict(credentials):
         """Convert the credentials into a form we can serialize."""
@@ -114,15 +113,15 @@ def get_authenticated_youtube_service():
     except:
         flow = InstalledAppFlow.from_client_secrets_file(
                                 CLIENT_SECRETS_FILE,
-                                scopes=SCOPES,
-                                access_type='offline')
+                                scopes=SCOPES)
         credentials = flow.run_console()
     with open(AUTH_FILE, 'w') as outfile:
         json.dump(yt_cred_to_dict(credentials), outfile)
 
-    service = build(API_SERVICE_NAME, API_VERSION, credentials=credentials)
+    yt_service = build('youtube', 'v3', credentials=credentials)
+    cal_service = build('calendar', 'v3', credentials=credentials)
     print("Done authenticating")
-    return service
+    return (yt_service, cal_service)
 
 
 def copy_todays_events(now, streams):
@@ -371,19 +370,19 @@ def update_stream_header(now, streams):
             write_header_for_stream(possible_stream[0])
 
 
-def get_streams():
+def get_streams(yt_service):
     """Fetch upcoming youtube streams."""
     # Fetch youtube streams
     print("Fetching YouTube streams...")
-    youtube = get_authenticated_youtube_service()
-    streams = list_streams(youtube)
+    streams = list_streams(yt_service)
     # Get a noew in pacific time we can use for scheduling and testing
     # Assumes system time is in pacific or UTC , which holds true on my home computer :p
     return streams
 
 
 if __name__ == '__main__':
-    streams = get_streams()
+    yt_service, cal_service = get_authenticated_google_services()
+    streams = get_streams(yt_service)
     now = datetime.datetime.now()
 
     # Try and work on both my computer and my server. Timezones :(
