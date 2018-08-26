@@ -124,7 +124,7 @@ def get_authenticated_google_services():
     return (yt_service, cal_service)
 
 
-def copy_todays_events(now, streams):
+def copy_todays_events(now, events, streams):
     # Filter to streams in the next 7 days
     def soon(stream):
         delta = stream['scheduledStartTime'] - now
@@ -132,6 +132,14 @@ def copy_todays_events(now, streams):
             delta < datetime.timedelta(days=7)
 
     upcoming_streams = filter(soon, streams)
+
+    # Filter to events in the next 7 days
+    def soon_event(event):
+        delta = event['start'] - now
+        return delta > datetime.timedelta(minutes=5) and \
+            delta < datetime.timedelta(days=7)
+
+    upcoming_events = filter(soon_event, events)
 
     twitch_link = "https://www.twitch.tv/holdenkarau"
     # Update buffer posts
@@ -149,7 +157,12 @@ def copy_todays_events(now, streams):
     # TODO(holden): Import talks from a special calendar
     # TODO(holden): Create a meta post of the weeks events
 
-    def format_posts(stream):
+    def format_event_post(event):
+        """Create posts for a given event."""
+        # TODO(holden): Format the event post
+        return []
+
+    def format_stream_post(stream):
         """Create posts for a given stream.
         Returns the short text, long text, and  tuple of schedule time."""
         # Munge the text to fit within our sentence structure
@@ -239,7 +252,12 @@ def copy_todays_events(now, streams):
                     create_join_me_on_day_x(stream),
                     create_join_tomorrow(stream)]
 
-    possible_posts = flatMap(format_posts, upcoming_streams)
+    possible_stream_posts = flatMap(format_stream_post, upcoming_streams)
+    possible_event_posts = flatMap(format_event_post, events)
+
+    possible_posts = []
+    possible_posts.extend(possible_stream_posts)
+    possible_posts.extend(possible_event_posts)
 
     # Only schedule posts in < 36 hours and < - 12 hours
     def is_reasonable_time(post):
@@ -380,6 +398,28 @@ def get_streams(yt_service):
     return streams
 
 
+def get_events(cal_service):
+    """Fetch calendar events"""
+    # Todo(later): unhardcode this if other folks want to use it
+    calendarId = "dqauku3a2tjqj7hc1psgnaeshs@group.calendar.google.com"
+    now_utc = datetime.datetime.utcnow().isoformat() + 'Z' # 'Z' indicates UTC time
+    events_result = cal_service.events().list(calendarId=calendarId, timeMin=now_utc,
+                                        maxResults=10, singleEvents=True,
+                                        orderBy='startTime').execute()
+    def post_process_event(event):
+        """Extract useful fields from the event."""
+        from dateutil import parser
+        parsed_time = parser.parse(str(event['start']['dateTime']))
+
+        return {
+            "start": parsed_time,
+            "location": event['location'],
+            "title": event['summary'],
+            "description": event['description']}
+
+    events = events_result.get('items', [])
+    return map(post_process_event, events)
+
 if __name__ == '__main__':
     yt_service, cal_service = get_authenticated_google_services()
     streams = get_streams(yt_service)
@@ -398,4 +438,6 @@ if __name__ == '__main__':
 
     now = now.astimezone(timezone)
     update_stream_header(now, streams)
-    copy_todays_events(now, streams)
+    print("Fetching events.")
+    events = get_events(cal_service)
+    copy_todays_events(now, events, streams)
