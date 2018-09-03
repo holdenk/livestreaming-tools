@@ -15,6 +15,7 @@ import time
 import bufferapp
 from bs4 import BeautifulSoup
 import bitly_api
+from dateutil import parser
 import google.oauth2.credentials
 import google_auth_oauthlib.flow
 from googleapiclient.discovery import build
@@ -23,6 +24,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from twitch import TwitchClient
 from itertools import chain, imap
 import memoized
+import yaml
 
 def flatMap(f, items):
     return chain.from_iterable(imap(f, items))
@@ -522,45 +524,164 @@ def shortten(link):
     token = os.getenv("BITLY_TOKEN")
     bitly = bitly_api.Connection(access_token=token)
     data = bitly.shorten(link)
-    return data['url']
+    return str(data['url'])
 
 
-def get_events(cal_service):
+def process_event_yaml(yaml_txt):
+    """Process the event YAML"""
+    parsed_description = dict(yaml.load(yaml_txt) or {})
+    return annotate_parsed_events(parsed_description)
+
+def annotate_parsed_events(parsed):
+    link_keys = [
+        "talk_link", "slides_link", "video_link", "event_link", "post_link",
+        "repo_link", "discussion_link"]
+    short_link_keys = map(lambda x: "short_" + x, link_keys)
+    raw_keys = ["start", "location", "title", "description", "parsed",
+                "tags", "event_name", "talk_description", "last_post_text"]
+    time_keys = ["date", "start", "synced_to_blog"]
+    listish_keys = ["copresenters"]
+    relevant_keys = raw_keys + link_keys + short_link_keys + listish_keys + time_keys
+    result = dict(map(lambda key: (key, parsed.get(key, None)), relevant_keys))
+    # Process the links
+    def process_link(keyname):
+        if result[keyname] is not None and result["short_" + keyname] is None:
+            result["short_" + keyname] = shortten(result[keyname])
+
+    map(process_link, link_keys)
+
+    # Process the times
+    def update_time(keyname):
+        if type(result[keyname]) is str:
+            result[keyname] = parser.parse(result[keyname])
+
+    map(update_time, time_keys)
+
+    # Handle quazi list keys
+    def quazi_list_keys(keyname):
+        if type(result[keyname]) is str:
+            result[keyname] = [result[keyname]]
+
+    map(quazi_list_keys, listish_keys)
+
+    # Warn if we have unexpected keys
+    unexpected = {key:value for key, value in parsed.items() if key not in relevant_keys}
+    if len(unexpected) > 0:
+        logging.warn("Unexpected keys {0} from {1}".format(unexpected, parsed))
+
+    return dict(result)
+
+def pre_annotate_event(event):
+    if event["date"] is None and event["start"] is not None:
+        event["date"] = event["start"].date()
+    return event
+
+def get_file_events(events_input_filename):
+    """Fetch events from file"""
+    with open(events_input_filename) as yaml_stream:
+        loaded_yaml = yaml.load(yaml_stream)
+        def process_event(k_v):
+            key, value = k_v
+            result = annotate_parsed_events(value)
+            if result["event_name"] is None:
+                result["event_name"] = key
+            return result
+
+        return map(process_event, loaded_yaml.items())
+
+def get_cal_events(cal_service):
     """Fetch calendar events"""
     # Todo(later): unhardcode this if other folks want to use it
     calendarId = "dqauku3a2tjqj7hc1psgnaeshs@group.calendar.google.com"
-    now_utc = datetime.datetime.utcnow().isoformat() + 'Z' # 'Z' indicates UTC time
-    events_result = cal_service.events().list(calendarId=calendarId, timeMin=now_utc,
-                                        maxResults=10, singleEvents=True,
-                                        orderBy='startTime').execute()
+    # Subtract 6 months
+    start_time = datetime.datetime.utcnow() - datetime.timedelta(days=6*30)
+    formatted_min_time = start_time.isoformat() + 'Z' # 'Z' indicates UTC time
+
+    events_result = cal_service.events().list(
+        calendarId=calendarId, timeMin=formatted_min_time,
+        maxResults=75, singleEvents=True,
+        orderBy='startTime').execute()
     def post_process_event(event):
         """Extract useful fields from the event."""
-        from dateutil import parser
         parsed_time = parser.parse(str(event['start']['dateTime']))
-        import yaml
-        parsed_description = dict(yaml.load(event['description']))
-        print(parsed_description)
-        parsed_description.get('talk_link', None)
-        talk_link = shortten(parsed_description.get('talk_link', None))
-        slides_link = shortten(parsed_description.get('slides_link', None))
-        video_link = shortten(parsed_description.get('video_link', None))
-        tags = parsed_description.get('tags', None)
-        event_name = parsed_description.get('event_name', None)
-
-        return {
-            "start": parsed_time,
-            "location": event['location'],
-            "title": event['summary'],
-            "description": event['description'],
-            "parsed": parsed_description,
-            "talk_link": talk_link,
-            "slides_link": slides_link,
-            "tags": tags,
-            "event_name": event_name,
-            "video_link": video_link}
+        description_text = event.get('description', None) or ""
+        result = process_event_yaml(description_text)
+        # Augment result with the time info
+        result["start"] = parsed_time
+        if not result["title"]:
+            result["title"] = str(event['summary'])
+        if result["location"]:
+            result["location"] = str(event['location'])
+        return result
 
     events = events_result.get('items', [])
     return map(post_process_event, events)
+
+def format_event_post(event):
+    def me_or_us():
+        if event.copresenters is not None:
+            return "us"
+        else:
+            return "me"
+
+    def thanks_or_come_join():
+        if event.date > now:
+            return "Thanks for joining {me_or_us} on {date}"
+        else:
+            return "Come join {me_or_us} on {date}"
+
+    def where():
+        if event.event_name is not None:
+            if event.location is not None:
+                return "at {event_name} {year} {event_city}"
+    def talk_details():
+        if event["talk_description"] is not None:
+            return "The talk covered: {talk_description}."
+
+    def make_links():
+        link_text = ""
+        if event["short_repo_link"] is not None:
+            link_text += "You can find the code for this talk at {short_repo_link}."
+        if event["short_slides_link"] is not None:
+            link_text += "The slides are at {short_slides_link}."
+        if event["short_video_link"] is not None:
+            link_text =+ "The video of the talk is up at {short_video_link}."
+        return link_text
+
+    def make_embeds():
+        embed_text = ""
+        if is_youtube(event["video_link"]):
+            embed_text += embed_youtube(event["video_link"])
+        elif is_vimeo(event["video_link"]):
+            embed_text += embed_vimeo(event["video_link"])
+        if is_slideshare(event["slide_link"]):
+            embed_text += embed_slideshare(event["slide_link"])
+
+    def generate_discussion():
+        if event["discussion_link"]:
+            return "Join in the discussion at {short_discussion_link}"
+        else:
+            return "Comment bellow to join in the discussion."
+
+    def footer():
+        return os.getenv(
+            "POST_FOOTER",
+            "Talk feedback is appreciated at http://bit.ly/holdenTalkFeedback")
+
+    return ("{thanks_or_come_join} {where} for {title}{talk_details}{talk_links}"
+            "{talk_embeds}{discussion}.{footer}").format(**fmt_string)
+
+
+def load_events():
+    events_input_filename = os.getenv(
+        "EVENTS_FILE",
+        "{0}/repos/talk-info/events.yaml".format(expanduser("~")))
+    events = get_cal_events(cal_service)
+    events.extend(get_file_events(events_input_filename))
+    pre_processed_events = map(pre_annotate_event, events)
+    # TODO(de-duplicate/merge events)
+    return pre_processed_events
+
 
 if __name__ == '__main__':
     yt_service, cal_service = get_authenticated_google_services()
@@ -579,7 +700,14 @@ if __name__ == '__main__':
         raise Exception("ugh timezones.")
 
     now = now.astimezone(timezone)
-    update_stream_header(now, streams)
+    #update_stream_header(now, streams)
     print("Fetching events.")
-    events = get_events(cal_service)
-    copy_todays_events(now, events, streams)
+    events = load_events()
+    events_output_filename = os.getenv(
+        "EVENTS_OUT_FILE",
+        "{0}/repos/talk-info/out_events.yaml".format(expanduser("~")))
+    with open(events_output_filename, 'w') as f:
+        keyed_events = dict(map(lambda event: (event["event_name"], event),
+                                events))
+        yaml.dump(keyed_events, f)
+    #copy_todays_events(now, events, streams)
