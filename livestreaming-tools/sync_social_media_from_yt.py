@@ -25,6 +25,10 @@ from twitch import TwitchClient
 from itertools import chain, imap
 import memoized
 import yaml
+import logging
+
+logging.basicConfig()
+logger = logging.getLogger(__name__)
 
 def flatMap(f, items):
     return chain.from_iterable(imap(f, items))
@@ -103,16 +107,16 @@ def get_authenticated_google_services():
 
     try:
         with open(AUTH_FILE) as data_file:
-            print("Loading credentials")
+            logger.debug("Loading credentials")
             credentials_dict = json.load(data_file)
             del credentials_dict['expiry']
             credentials = google.oauth2.credentials.Credentials(**credentials_dict)
             request = google.auth.transport.requests.Request()
             credentials.refresh(request)
             if not credentials.valid:
-                print("Credentials aren't valid, trying to refresh...")
+                logger.error("Credentials aren't valid, trying to refresh...")
                 raise Exception("I'm sad, creds aren't happy")
-            print("Using saved credentials")
+            logger.debug("Using saved credentials")
     except:
         flow = InstalledAppFlow.from_client_secrets_file(
                                 CLIENT_SECRETS_FILE,
@@ -123,7 +127,7 @@ def get_authenticated_google_services():
 
     yt_service = build('youtube', 'v3', credentials=credentials)
     cal_service = build('calendar', 'v3', credentials=credentials)
-    print("Done authenticating")
+    logger.debug("Done authenticating")
     return (yt_service, cal_service)
 
 
@@ -146,7 +150,7 @@ def copy_todays_events(now, events, streams):
 
     twitch_link = "https://www.twitch.tv/holdenkarau"
     # Update buffer posts
-    print("Updating posts...")
+    logger.debug("Updating posts...")
     buffer_clientid = os.getenv("BUFFER_CLIENTID")
     buffer_client_secret = os.getenv("BUFFER_CLIENT_SECRET")
     buffer_token = os.getenv("BUFFER_CODE")
@@ -375,7 +379,7 @@ def copy_todays_events(now, events, streams):
     def post_as_needed_to_profile(profile):
         # Special case twitter for short text
         posts = []
-        print(profile.formatted_service)
+        logger.debugg(profile.formatted_service)
         if profile.formatted_service == u"Twitter":
             posts = map(lambda post: (post[1], post[2], post[3], post[4], post[5]),
                         desired_posts)
@@ -437,8 +441,8 @@ def copy_todays_events(now, events, streams):
         unpublished_posts = filter(
             lambda post: not allready_published(post), posts)
 
-        print("Prepairing to update with new posts:")
-        print(unpublished_posts)
+        logger.debug("Prepairing to update with new posts:")
+        logger.debug(unpublished_posts)
 
         updates = profile.updates
         for post in unpublished_posts:
@@ -457,8 +461,8 @@ def copy_todays_events(now, events, streams):
                     updates.new(post[0], shorten=False,
                                 now=True)
             except:
-                print("Skipping update")
-                print(post)
+                logger.warn("Skipping update")
+                logger.warn(post)
 
     for profile in profiles:
         post_as_needed_to_profile(profile)
@@ -471,7 +475,7 @@ def copy_todays_events(now, events, streams):
             oauth_token=os.getenv("TWITCH_OAUTH"))
         channel_info = twitch_client.channels.get()
         channel_id = channel_info.id
-        print(channel_id)
+        logger.debug(channel_id)
         # Get existing updates
         posts = twitch_client.channel_feed.get_posts(
             channel_id=channel_id, comments=None)
@@ -485,7 +489,7 @@ def update_stream_header(now, streams):
         filter(lambda stream: stream['scheduledStartTime'].date() == now.date(), streams))
 
     def write_header_for_stream(stream):
-        print("Updating header for stream {0}".format(stream))
+        logger.debug("Updating header for stream {0}".format(stream))
         review_header_name = "{0}/review_info.txt".format(expanduser("~"))
         with open(review_header_name, 'w') as f:
             f.write(stream['title'])
@@ -509,7 +513,7 @@ def update_stream_header(now, streams):
 def get_streams(yt_service):
     """Fetch upcoming youtube streams."""
     # Fetch youtube streams
-    print("Fetching YouTube streams...")
+    logger.debug("Fetching YouTube streams...")
     streams = list_streams(yt_service)
     # Get a noew in pacific time we can use for scheduling and testing
     # Assumes system time is in pacific or UTC , which holds true on my home computer :p
@@ -567,7 +571,7 @@ def annotate_parsed_events(parsed):
     # Warn if we have unexpected keys
     unexpected = {key:value for key, value in parsed.items() if key not in relevant_keys}
     if len(unexpected) > 0:
-        logging.warn("Unexpected keys {0} from {1}".format(unexpected, parsed))
+        logger.warn("Unexpected keys {0} from {1}".format(unexpected, parsed))
 
     return dict(result)
 
@@ -684,6 +688,7 @@ def load_events():
 
 
 if __name__ == '__main__':
+    logger.setLevel("DEBUG")
     yt_service, cal_service = get_authenticated_google_services()
     streams = get_streams(yt_service)
     now = datetime.datetime.now()
@@ -701,7 +706,7 @@ if __name__ == '__main__':
 
     now = now.astimezone(timezone)
     #update_stream_header(now, streams)
-    print("Fetching events.")
+    logger.debug("Fetching events.")
     events = load_events()
     events_output_filename = os.getenv(
         "EVENTS_OUT_FILE",
