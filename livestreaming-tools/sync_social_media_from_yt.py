@@ -87,10 +87,21 @@ def get_authenticated_google_services():
     # user's account, but not other types of account access.
     SCOPES = ['https://www.googleapis.com/auth/youtube.readonly',
               'https://www.googleapis.com/auth/calendar.readonly']
-    CLIENT_SECRETS_FILE = os.getenv("GOOGLE_CLIENT_SECRET")
+    # Look for the AUTH and client secrets file
+    CLIENT_SECRETS_FILE = os.getenv(
+        "GOOGLE_CLIENT_SECRET",
+        "{0}/g_client_secrets_file".format(expanduser("~")))
     AUTH_FILE = os.getenv(
         "G_AUTH_FILE",
         "{0}/g_auth_file".format(expanduser("~")))
+    if not os.path.isfile(CLIENT_SECRETS_FILE):
+        print("Could not find client secrets file. Either place in default location"
+              "or set  GOOGLE_CLIENT_SECRET to path.")
+        sys.exit(-1)
+    if not os.path.isfile(AUTH_FILE):
+        print("Could not find auth file. Either place in default location"
+              "or set  G_AUTH_FILE to path.")
+        sys.exit(-1)
 
     def yt_cred_to_dict(credentials):
         """Convert the credentials into a form we can serialize."""
