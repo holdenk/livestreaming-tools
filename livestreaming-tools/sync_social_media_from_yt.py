@@ -154,7 +154,10 @@ def copy_todays_events(now, events, streams):
 
     # Filter to events in the next 7 days
     def soon_event(event):
-        delta = event['start'] - now
+        # We always have a date, we might not know what time were speaking like at DDTX
+        delta = event['date'] - now.date()
+        if 'start' in event and event['start'] is not None:
+            delta = event['start'] - now
         return delta > datetime.timedelta(minutes=5) and \
             delta < datetime.timedelta(days=7)
 
@@ -226,8 +229,8 @@ def copy_todays_events(now, events, streams):
                     join_on = "join me {0} ".format(event['event_name'])
                 else:
                     join_on = "join me @ {0} ".format(event['event_name'])
-            # We always have a time...
-            join_at = " @ {0} ".format(format_time_func(event['start']))
+            # We often have a time, always have a date
+            join_at = " @ {0}".format(format_time_func(event))
             link_text = ""
             if event['talk_link'] is not None:
                 link_text = " {0}".format(event['talk_link'])
@@ -246,7 +249,8 @@ def copy_todays_events(now, events, streams):
                     None, event['talk_link'], short_title)
 
         def format_past():
-            if event['slides_link'] and events['video_link']:
+            # TODO(holden): Figure out media links for past talks
+            if event['slides_link'] and event['video_link']:
                 full_text = "Slides and video now up from {0} at {1} and {2}".format(
                     title, event['slides_link'], event['video_link'])
                 short_text = "Slides and video now up from {0} at {1} and {2}{3}".format(
@@ -268,9 +272,13 @@ def copy_todays_events(now, events, streams):
             else:
                 return None
 
-        if event['start'] > now:
+        if (event['start'] is not None and event['start'] > now) or (event['date'] > now.date()):
             # Post for join me today
-            def format_time_join_me_today(time):
+            def format_time_join_me_today(event):
+                has_time = 'start' in event and event['start'] is not None
+                if not has_time:
+                    return "today"
+                time = event['start']
                 if time.minute == 0:
                     return time.strftime("today @ %-I%p")
                 else:
@@ -283,7 +291,11 @@ def copy_todays_events(now, events, streams):
                 return [today_post]
 
             # Post for join me this week
-            def format_time_join_me_this_week(time):
+            def format_time_join_me_this_week(event):
+                has_time = 'start' in event and event['start'] is not None
+                if not has_time:
+                    return event['date'].strftime("%A")
+                time = event['start']
                 if time.minute == 0:
                     return time.strftime("%A @ %-I%p")
                 else:
@@ -298,7 +310,7 @@ def copy_todays_events(now, events, streams):
             if past:
                 return [past]
             else:
-                return None
+                return []
         
 
     def format_stream_post(stream):
@@ -373,8 +385,8 @@ def copy_todays_events(now, events, streams):
                     create_join_me_on_day_x(stream),
                     create_join_tomorrow(stream)]
 
-    possible_stream_posts = flatMap(format_stream_post, upcoming_streams)
-    possible_event_posts = flatMap(format_event_post, events)
+    possible_stream_posts = list(flatMap(format_stream_post, upcoming_streams))
+    possible_event_posts = list(flatMap(format_event_post, events))
 
     possible_posts = []
     possible_posts.extend(possible_stream_posts)
@@ -382,6 +394,9 @@ def copy_todays_events(now, events, streams):
 
     # Only schedule posts in < 36 hours and < - 12 hours
     def is_reasonable_time(post):
+        # If we don't have a time to schedule always a good time
+        if post[2] is None:
+            return True
         delta_from_now = post[2] - now
         return delta_from_now < datetime.timedelta(hours=25, minutes=55) and \
             delta_from_now > datetime.timedelta(days=-5)
@@ -391,7 +406,7 @@ def copy_todays_events(now, events, streams):
     def post_as_needed_to_profile(profile):
         # Special case twitter for short text
         posts = []
-        logger.debugg(profile.formatted_service)
+        logger.debug(profile.formatted_service)
         if profile.formatted_service == u"Twitter":
             posts = map(lambda post: (post[1], post[2], post[3], post[4], post[5]),
                         desired_posts)
@@ -426,7 +441,7 @@ def copy_todays_events(now, events, streams):
             # Something something &nbsp;
             text = text.replace("\t", "")
             text = text.replace("&nbsp;", "")
-            return text.lower()
+            return unicode(text.lower())
 
         # Get the text and link
         def extract_special(update):
@@ -446,9 +461,10 @@ def copy_todays_events(now, events, streams):
         all_updates_special = sets.Set(map(extract_special, all_updates))
 
         def allready_published(post):
-            return unicode(post[0]) in all_updates_text or \
-                unicode(mini_clean_text(post[0])) in all_updates_partial_text or \
-                (unicode(clean_odd_text(post[0])), unicode(post[3])) in all_updates_special
+            in_all_updates_text = unicode(post[0]) in all_updates_text
+            in_partial_text = unicode(mini_clean_text(post[0])) in all_updates_partial_text
+            in_special = (unicode(clean_odd_text(post[0])), unicode(post[3])) in all_updates_special
+            return in_all_updates_text or in_partial_text or in_special
 
         unpublished_posts = filter(
             lambda post: not allready_published(post), posts)
@@ -465,15 +481,17 @@ def copy_todays_events(now, events, streams):
                         media = {"thumbnail": post[2], "link": post[3], "picture": post[2],
                                  "description": post[4]}
             try:
-                if post[1] > now:
+                if post[1] is None:
+                    updates.new(post[0], shorten=False)
+                elif post[1] > now:
                     target_time_in_utc = post[1].astimezone(pytz.UTC)
                     updates.new(post[0], shorten=False, media=media,
                                 when=unix_time_seconds(target_time_in_utc))
                 else:
                     updates.new(post[0], shorten=False,
                                 now=True)
-            except:
-                logger.warn("Skipping update")
+            except Exception as e:
+                logger.warn("Skipping update {0}".format(e))
                 logger.warn(post)
 
     for profile in profiles:
@@ -748,4 +766,4 @@ if __name__ == '__main__':
             map(lambda event: (event["event_name"], event),
                 events))
         yaml.dump(keyed_events, f)
-    #copy_todays_events(now, events, streams)
+    copy_todays_events(now, events, streams)
