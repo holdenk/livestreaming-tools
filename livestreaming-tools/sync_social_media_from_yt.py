@@ -617,17 +617,17 @@ def get_cal_events(cal_service):
         calendarId=calendarId, timeMin=formatted_min_time,
         maxResults=75, singleEvents=True,
         orderBy='startTime').execute()
-    def post_process_event(event):
+    def post_process_event(cal_event):
         """Extract useful fields from the event."""
-        parsed_time = parser.parse(str(event['start']['dateTime']))
-        description_text = event.get('description', None) or ""
+        parsed_time = parser.parse(str(cal_event['start']['dateTime']))
+        description_text = cal_event.get('description', None) or ""
         result = process_event_yaml(description_text)
         # Augment result with the time info
         result["start"] = parsed_time
         if not result["title"]:
-            result["title"] = str(event['summary'])
-        if result["location"]:
-            result["location"] = str(event['location'])
+            result["title"] = str(cal_event['summary'])
+        if not result["location"] and 'location' in cal_event:
+            result["location"] = str(cal_event['location'])
         return result
 
     events = events_result.get('items', [])
@@ -694,7 +694,17 @@ def load_events():
         "{0}/repos/talk-info/events.yaml".format(expanduser("~")))
     events = get_cal_events(cal_service)
     events.extend(get_file_events(events_input_filename))
-    pre_processed_events = map(pre_annotate_event, events)
+    # Filter out events without minimal requires keys
+    def is_valid_event(event):
+        required_keys = ["event_name", "title"]
+        valid_event = all(key in event and event[key] is not None
+                          for key in required_keys)
+        if not valid_event:
+            logger.debug("Removed event {0}".format(event))
+        return valid_event
+
+    valid_events = filter(is_valid_event, events)
+    pre_processed_events = map(pre_annotate_event, valid_events)
     # TODO(de-duplicate/merge events)
     return pre_processed_events
 
@@ -734,7 +744,8 @@ if __name__ == '__main__':
         "EVENTS_OUT_FILE",
         "{0}/repos/talk-info/out_events.yaml".format(expanduser("~")))
     with open(events_output_filename, 'w') as f:
-        keyed_events = dict(map(lambda event: (event["event_name"], event),
-                                events))
+        keyed_events = dict(
+            map(lambda event: (event["event_name"], event),
+                events))
         yaml.dump(keyed_events, f)
     #copy_todays_events(now, events, streams)
