@@ -94,10 +94,6 @@ def get_authenticated_google_services():
     AUTH_FILE = os.getenv(
         "G_AUTH_FILE",
         "{0}/g_auth_file".format(expanduser("~")))
-    if not os.path.isfile(CLIENT_SECRETS_FILE):
-        print("Could not find client secrets file. Either place in default location"
-              "or set  GOOGLE_CLIENT_SECRET to path.")
-        sys.exit(-1)
     if not os.path.isfile(AUTH_FILE):
         print("Could not find auth file. Either place in default location"
               "or set  G_AUTH_FILE to path.")
@@ -129,6 +125,11 @@ def get_authenticated_google_services():
                 raise Exception("I'm sad, creds aren't happy")
             logger.debug("Using saved credentials")
     except:
+        if not os.path.isfile(CLIENT_SECRETS_FILE):
+            print("Could not find client secrets file. Either place in default location"
+                  "or set  GOOGLE_CLIENT_SECRET to path. Required to auth new flow.")
+            sys.exit(-1)
+
         flow = InstalledAppFlow.from_client_secrets_file(
                                 CLIENT_SECRETS_FILE,
                                 scopes=SCOPES)
@@ -700,6 +701,16 @@ def load_events():
 
 if __name__ == '__main__':
     logger.setLevel("DEBUG")
+    required_envs = ["BUFFER_CLIENTID", "BUFFER_CLIENT_SECRET", "BUFFER_CODE", "BITLY_TOKEN"]
+
+    def check_env_is_set(env_name):
+        if os.getenv(env_name) is None:
+            logger.error("You must set enviroment variable {0}".format(env_name))
+            sys.exit(-1)
+
+    for env in required_envs:
+        check_env_is_set(env)
+
     yt_service, cal_service = get_authenticated_google_services()
     streams = get_streams(yt_service)
     now = datetime.datetime.now()
