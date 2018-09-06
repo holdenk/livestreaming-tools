@@ -221,19 +221,25 @@ def copy_todays_events(now, events, streams):
             if city_name is not None:
                 hey_friends = "Hey {0} friends, ".format(city_name)
             # Figure out the join on text
-            join_on = "join me"
-            if 'event_name' in event:
+            who = "me"
+            if 'copresenters' in event and event['copresenters'] is not None:
+                if len(event['copresenters']) == 1:
+                    who = "me and {0} ".format(event['copresenters'][0])
+                else:
+                    who = "{0} and myself".format(", ".join(event['copresenters']))
+            join_on = "join {0}".format(who)
+            if 'event_name' in event and event['event_name'] is not None:
                 event_name = event['event_name']
                 # For event names that are twitter handles don't dupe the @
                 if "@" in event_name:
-                    join_on = "join me {0} ".format(event['event_name'])
+                    join_on = "join {0} {1} ".format(who, event['event_name'])
                 else:
-                    join_on = "join me @ {0} ".format(event['event_name'])
+                    join_on = "join {0} @ {1} ".format(who, event['event_name'])
             # We often have a time, always have a date
             join_at = " @ {0}".format(format_time_func(event))
             link_text = ""
-            if event['talk_link'] is not None:
-                link_text = " {0}".format(event['talk_link'])
+            if event['short_talk_link'] is not None:
+                link_text = " {0}".format(event['short_talk_link'])
             
             full_text = "{0}{1}{2} for {3}{4}".format(
                 hey_friends, join_on, join_at, title, link_text)
@@ -246,7 +252,7 @@ def copy_todays_events(now, events, streams):
                     join_on, join_at, short_title, link_text)
 
             return (full_text, short_text, event['start'] - delta,
-                    None, event['talk_link'], short_title)
+                    None, event['short_talk_link'], short_title)
 
         def format_past():
             # TODO(holden): Figure out media links for past talks
@@ -463,8 +469,10 @@ def copy_todays_events(now, events, streams):
         def allready_published(post):
             in_all_updates_text = unicode(post[0]) in all_updates_text
             in_partial_text = unicode(mini_clean_text(post[0])) in all_updates_partial_text
+            logger.debug("Special: {0}".format((unicode(clean_odd_text(post[0])), unicode(post[3]))))
             in_special = (unicode(clean_odd_text(post[0])), unicode(post[3])) in all_updates_special
-            return in_all_updates_text or in_partial_text or in_special
+            in_special_ish = (unicode(clean_odd_text(post[0])), unicode(post[4])) in all_updates_special
+            return in_all_updates_text or in_partial_text or in_special or in_special_ish
 
         unpublished_posts = filter(
             lambda post: not allready_published(post), posts)
