@@ -688,9 +688,11 @@ def make_event_blogs(events, blog_service):
     Mutates the events to contain the new post text if we generate a post."""
     event_and_posts = map(lambda event: (event, format_event_blog(event)), events)
     event_and_posts_to_be_updated = filter(
-        lambda e_p: e_p[0]["last_post_text"] is not None and e_p[0]["last_post_text"] != e_p[1], event_and_posts)
+        lambda e_p: e_p[0]["post_id"] is not None and e_p[0]["last_post_text"] != e_p[1],
+        event_and_posts)
     event_and_posts_to_be_created = filter(
-        lambda e_p: e_p[0]["last_post_text"] is None, event_and_posts)
+        lambda e_p: e_p[0]["last_post_text"] is None and e_p[0]["post_id"] is None,
+        event_and_posts)
     logger.debug(dir(blog_service))
     logger.debug(dir(blog_service.blogs()))
     blog_id_query = blog_service.blogs().getByUrl(url="http://blog.holdenkarau.com")
@@ -701,13 +703,18 @@ def make_event_blogs(events, blog_service):
             body={"title": event["title"] + " @ " + event["event_name"], "content": post},
             blogId=blog_id)
         post_result = post_query.execute()
-        event["post_link"] = post_result["url"]
-        event["post_id"] = post_result["id"]
+        event["post_link"] = str(post_result["url"])
+        event["post_id"] = str(post_result["id"])
         event["last_post_text"] = post
         event["short_post_link"] = shortten(event["post_link"])
+        # Temporary hack only make one post per call, leave the rest for later
+        # so as to not overwhelm. TODO(holden) -- better schedualing
         break
-    # Temporary hack only make one post per call, leave the rest for later
-    # so as to not overwhelm.
+    for event, post in event_and_posts_to_be_updated:
+        post_query = blog_service.posts().update(
+            body={"title": event["title"] + " @ " + event["event_name"], "content": post},
+            blogId=blog_id, postId=event["post_id"])
+        event["last_post_text"] = post
     return events
 
 def format_event_blog(event):
@@ -741,6 +748,12 @@ def format_event_blog(event):
             return "The talk covered: {talk_description}."
         return ""
 
+    def event_type():
+        if event["event_type"] is not None:
+            return event["event_type"]
+        else:
+            return "talk"
+
     def talk_links():
         link_text = ""
         if event["short_repo_link"] is not None:
@@ -749,8 +762,11 @@ def format_event_blog(event):
             link_text += 'The <a href="{short_slides_link}">slides are at {short_slides_link}</a>.'
         if event["short_video_link"] is not None:
             link_text =+ 'The <a href="{short_video_link}">video of the talk is up at {short_video_link}</a>.'
-        if link_text == "" and event_type == "talk":
-            link_text = "I'll update this post with the slides"
+        # Put the link's in a paragraph.
+        if link_text != "":
+            link_text = "<p>{0}</p>".format(link_text)
+        if link_text == "" and event_type() == "talk":
+            link_text = "I'll update this post with the slides soon."
         return link_text
 
     def talk_embeds():
@@ -784,10 +800,11 @@ def format_event_blog(event):
 
     fmt_elements = event.copy()
     other_elements = {
-        'event_type': event['event_type'] or "talk",
+        'event_type': event_type(),
         'me_or_us': me_or_us(), 'year': year(),
         'thanks_or_come_join': thanks_or_come_join(), 'where': where(),
         'talk_details': talk_details(), 'talk_links': talk_links(), 'talk_embeds': talk_embeds(),
+        'title_w_link': title_w_link(),
         'discussion': discussion(), 'footer': footer()}
     fmt_elements.update(other_elements)
 
