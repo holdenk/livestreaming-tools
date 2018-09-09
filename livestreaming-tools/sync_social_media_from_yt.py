@@ -646,6 +646,9 @@ def get_cal_events(cal_service):
     def post_process_event(cal_event):
         """Extract useful fields from the event."""
         parsed_time = parser.parse(str(cal_event['start']['dateTime']))
+        if 'timeZone' in cal_event['start']:
+            timezone = pytz.timezone(cal_event['start']['timeZone'])
+            parsed_time = parsed_time.astimezone(timezone)
         description_text = cal_event.get('description', None) or ""
         result = process_event_yaml(description_text)
         # Augment result with the time info
