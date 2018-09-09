@@ -10,6 +10,7 @@ import random
 import re
 import sets
 import sys
+from string import Formatter
 import time
 
 import bufferapp
@@ -26,6 +27,8 @@ from itertools import chain, imap
 import memoized
 import yaml
 import logging
+
+from embed_helpers import *
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -580,11 +583,14 @@ def annotate_parsed_events(parsed):
         "repo_link", "discussion_link"]
     short_link_keys = map(lambda x: "short_" + x, link_keys)
     raw_keys = ["start", "location", "title", "description", "parsed",
-                "tags", "event_name", "talk_description", "last_post_text"]
+                "tags", "event_name", "talk_description", "last_post_text",
+                "blog_fmt_text"]
     time_keys = ["date", "start", "synced_to_blog"]
     listish_keys = ["copresenters"]
     relevant_keys = raw_keys + link_keys + short_link_keys + listish_keys + time_keys
-    result = dict(map(lambda key: (key, parsed.get(key, None)), relevant_keys))
+    result = dict(map(
+        lambda key: (key, parsed.get(key, None)),
+        relevant_keys))
     # Process the links
     def process_link(keyname):
         if result[keyname] is not None and result["short_" + keyname] is None:
@@ -605,6 +611,13 @@ def annotate_parsed_events(parsed):
             result[keyname] = [result[keyname]]
 
     map(quazi_list_keys, listish_keys)
+
+    # Handle the stringy keys
+    def handle_string_ish_key(keyname):
+        if result[keyname] is not None:
+            # TODO: handle unicode input
+            result[keyname] = str(result[keyname])
+    map(handle_string_ish_key, raw_keys)
 
     # Warn if we have unexpected keys
     unexpected = {key:value for key, value in parsed.items() if key not in relevant_keys}
@@ -662,28 +675,49 @@ def get_cal_events(cal_service):
     events = events_result.get('items', [])
     return map(post_process_event, events)
 
-def format_event_post(event):
+def make_event_blogs(events):
+    """Make the posts for the provided events.
+    Mutates the events to contain the new post text if we generate a post."""
+    event_and_posts = map(lambda event: (event, format_event_blog(event)), events)
+    event_and_posts_to_be_updated = filter(
+        lambda e_p: e_p[0]["last_post_text"] != e_p[1], event_and_posts)
+    logger.debug(event_and_posts_to_be_updated)
+    # Temporary hack only make one post per call, leave the rest for later
+    # so as to not overwhelm.
+    return events
+
+def format_event_blog(event):
     def me_or_us():
-        if event.copresenters is not None:
+        if event["copresenters"] is not None:
             return "us"
         else:
             return "me"
 
     def thanks_or_come_join():
-        if event.date > now:
+        if event["date"] < now.date():
             return "Thanks for joining {me_or_us} on {date}"
         else:
             return "Come join {me_or_us} on {date}"
 
+    def year():
+        year = str(event["date"].year)
+        if year in event["event_name"]:
+            return ""
+        else:
+            return " " + year
+
     def where():
-        if event.event_name is not None:
-            if event.location is not None:
-                return "at {event_name} {year} {event_city}"
+        if event["event_name"] is not None:
+            if event["location"] is not None:
+                return "at {event_name}{year} {location}"
+        return ""
+
     def talk_details():
         if event["talk_description"] is not None:
             return "The talk covered: {talk_description}."
+        return ""
 
-    def make_links():
+    def talk_links():
         link_text = ""
         if event["short_repo_link"] is not None:
             link_text += "You can find the code for this talk at {short_repo_link}."
@@ -693,28 +727,49 @@ def format_event_post(event):
             link_text =+ "The video of the talk is up at {short_video_link}."
         return link_text
 
-    def make_embeds():
+    def talk_embeds():
         embed_text = ""
         if is_youtube(event["video_link"]):
             embed_text += embed_youtube(event["video_link"])
         elif is_vimeo(event["video_link"]):
             embed_text += embed_vimeo(event["video_link"])
-        if is_slideshare(event["slide_link"]):
-            embed_text += embed_slideshare(event["slide_link"])
+        if is_slideshare(event["slides_link"]):
+            embed_text += embed_slideshare(event["slides_link"])
+        return embed_text
 
-    def generate_discussion():
+    def discussion():
         if event["discussion_link"]:
             return "Join in the discussion at {short_discussion_link}"
         else:
             return "Comment bellow to join in the discussion."
+
 
     def footer():
         return os.getenv(
             "POST_FOOTER",
             "Talk feedback is appreciated at http://bit.ly/holdenTalkFeedback")
 
-    return ("{thanks_or_come_join} {where} for {title}{talk_details}{talk_links}"
-            "{talk_embeds}{discussion}.{footer}").format(**fmt_string)
+    fmt_elements = event.copy()
+    other_elements = {
+        'me_or_us': me_or_us(), 'year': year(),
+        'thanks_or_come_join': thanks_or_come_join(), 'where': where(),
+        'talk_details': talk_details(), 'talk_links': talk_links(), 'talk_embeds': talk_embeds(),
+        'discussion': discussion(), 'footer': footer()}
+    fmt_elements.update(other_elements)
+
+    # Format until we're done
+    c = 0
+    post_string = event['blog_fmt_text'] or \
+        ("{thanks_or_come_join} {where} for {title}.{talk_details}{talk_links}"
+         "{talk_embeds}{discussion}.{footer}")
+    logger.debug("Formatting {post_string} with {fmt_elements}".format(
+        post_string=post_string, fmt_elements=fmt_elements))
+    result = post_string.format(**fmt_elements)
+    while result != result.format(**fmt_elements):
+        logger.debug(result)
+        result = result.format(**fmt_elements)
+    logger.debug(result)
+    return result
 
 
 def load_events():
@@ -734,8 +789,26 @@ def load_events():
 
     valid_events = filter(is_valid_event, events)
     pre_processed_events = map(pre_annotate_event, valid_events)
-    # TODO(de-duplicate/merge events)
-    return pre_processed_events
+    # De duplicate events by day and name
+    events_dict = {}
+    for event in pre_processed_events:
+        day = event['date']
+        title = event['title']
+        event_name = event['event_name']
+        key = (day, title, event_name)
+        if key not in events_dict:
+            events_dict[key] = event
+        else:
+            # Duplicate! Merge event time. Existing event has priority because *shrug*
+            # TODO(holden): Add an updated field maybe and use that for priority?
+            existing_event = events_dict[key]
+            merged_event_keys = sets.Set(event.keys() + existing_event.keys())
+            for key in merged_event_keys:
+                if key not in existing_event or existing_event[key] is None:
+                    existing_event[key] = event[key]
+                
+                    
+    return events_dict.values()
 
 
 if __name__ == '__main__':
@@ -769,6 +842,8 @@ if __name__ == '__main__':
     #update_stream_header(now, streams)
     logger.debug("Fetching events.")
     events = load_events()
+    # Make posts for events
+    # make_event_blogs(events)
     events_output_filename = os.getenv(
         "EVENTS_OUT_FILE",
         "{0}/repos/talk-info/out_events.yaml".format(expanduser("~")))
