@@ -715,6 +715,7 @@ def make_event_blogs(events, blog_service):
         post_query = blog_service.posts().update(
             body={"title": event["title"] + " @ " + event["event_name"], "content": post},
             blogId=blog_id, postId=event["post_id"])
+        post_query.execute()
         event["last_post_text"] = post
     return events
 
@@ -797,7 +798,7 @@ def format_event_blog(event):
 
     def title_w_link():
         if event['short_talk_link']:
-            return '<a href="short_talk_link">{title}</a>'
+            return '<a href="{short_talk_link}">{title}</a>'
         return '{title}'
 
     fmt_elements = event.copy()
