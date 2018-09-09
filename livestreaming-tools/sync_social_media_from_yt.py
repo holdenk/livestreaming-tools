@@ -12,6 +12,7 @@ import sets
 import sys
 from string import Formatter
 import time
+import markdown2
 
 import bufferapp
 from bs4 import BeautifulSoup
@@ -745,7 +746,8 @@ def format_event_blog(event):
 
     def talk_details():
         if event["talk_description"] is not None:
-            return "The talk covered: {talk_description}."
+            new_description = markdown2.markdown(event["talk_description"])
+            return "The talk covered: {new_description}.".format(new_description=new_description)
         return ""
 
     def event_type():
