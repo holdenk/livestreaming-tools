@@ -267,23 +267,31 @@ def copy_todays_events(now, events, streams):
         def format_past():
             # TODO(holden): Figure out media links for past talks
             if event['slides_link'] and event['video_link']:
-                full_text = "Slides and video now up from {0} at {1} and {2}".format(
-                    title, event['short_slides_link'], event['short_video_link'])
-                short_text = "Slides and video now up from {0} at {1} and {2}{3}".format(
-                    short_title, event['short_slides_link'], event['short_video_link'], tag_text)
+                full_text = "Slides and video now up from {title} at {short_slides_link} and {short_video_link}".format(
+                    title=title,
+                    short_slides_link=event['short_slides_link'],
+                    short_video_link=event['short_video_link'])
+                short_text = "Slides and video now up from {short_title} at {short_slides_link} and {short_video_link}{tag_text}".format(
+                    short_title=short_title,
+                    short_slides_link=event['short_slides_link'],
+                    short_video_link=event['short_video_link'],
+                    tag_text=tag_text)
                 if len(short_text) > 230:
                     short_text = "Slides & video from {0} at {1} and {2}".format(
                         short_title, event['short_slides_link'], event['short_video_link'])
                 return (full_text, short_text, None, None, None, event['short_video_link'], short_title)
             # TODO(holden): Add a function to check if the slides have been linked on video.
             elif event['slides_link']:
-                full_text = "Slides now up from {0} at {1} :)".format(
-                    title, event['short_slides_link'])
-                short_text = "Slides now up from {0} at {1}{2}:)".format(
-                    short_title, event['slides_link'], tag_text)
+                full_text = "Slides now up from {title} at {short_slides_link} :)".format(
+                    title=title, short_slides_link=event['short_slides_link'])
+                short_text = "Slides now up from {short_title} at {short_slides_link}{tag_text}:)".format(
+                    short_title=short_title,
+                    short_slides_link=event['short_slides_link'],
+                    tag_text=tag_text)
                 if len(short_text) > 230:
-                    short_text = "Slides from {0} @ {1}".format(
-                        short_title, event['short_slides_link'], event['short_slides_link'])
+                    short_text = "Slides from {short_title} @ {short_slides_link}".format(
+                        short_title=short_title,
+                        short_slides_link=event['short_slides_link'])
                 return (full_text, short_text, None, None, None, event['short_slides_link'], short_title)
             else:
                 return None
