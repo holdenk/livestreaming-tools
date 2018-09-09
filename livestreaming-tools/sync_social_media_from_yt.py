@@ -89,7 +89,8 @@ def get_authenticated_google_services():
     # This OAuth 2.0 access scope allows for read-only access to the authenticated
     # user's account, but not other types of account access.
     SCOPES = ['https://www.googleapis.com/auth/youtube.readonly',
-              'https://www.googleapis.com/auth/calendar.readonly']
+              'https://www.googleapis.com/auth/calendar.readonly',
+              'https://www.googleapis.com/auth/blogger']
     # Look for the AUTH and client secrets file
     CLIENT_SECRETS_FILE = os.getenv(
         "GOOGLE_CLIENT_SECRET",
@@ -97,9 +98,9 @@ def get_authenticated_google_services():
     AUTH_FILE = os.getenv(
         "G_AUTH_FILE",
         "{0}/g_auth_file".format(expanduser("~")))
-    if not os.path.isfile(AUTH_FILE):
-        print("Could not find auth file. Either place in default location"
-              "or set  G_AUTH_FILE to path.")
+    if not os.path.isfile(AUTH_FILE) and not os.path.isfile(CLIENT_SECRETS_FILE):
+        print("Could not find auth file or client secrets. Either place in default location"
+              "or set G_AUTH_FILE / CLIENT_SECRETS_FILE to path.")
         sys.exit(-1)
 
     def yt_cred_to_dict(credentials):
@@ -127,7 +128,8 @@ def get_authenticated_google_services():
                 logger.error("Credentials aren't valid, trying to refresh...")
                 raise Exception("I'm sad, creds aren't happy")
             logger.debug("Using saved credentials")
-    except:
+    except Exception as e:
+        logger.debug("Failed to use saved credentials {e}".format(e=e))
         if not os.path.isfile(CLIENT_SECRETS_FILE):
             print("Could not find client secrets file. Either place in default location"
                   "or set  GOOGLE_CLIENT_SECRET to path. Required to auth new flow.")
@@ -142,8 +144,9 @@ def get_authenticated_google_services():
 
     yt_service = build('youtube', 'v3', credentials=credentials)
     cal_service = build('calendar', 'v3', credentials=credentials)
+    blog_service = build('blogger', 'v3', credentials=credentials)
     logger.debug("Done authenticating")
-    return (yt_service, cal_service)
+    return (yt_service, cal_service, blog_service)
 
 
 def copy_todays_events(now, events, streams):
@@ -216,7 +219,10 @@ def copy_todays_events(now, events, streams):
         # Add the tags field with a space so it doesn't join the link
         tag_text = ""
         if 'tags' in event:
-            tag_text = " / {0}".format(event['tags'])
+            if type(event['tags']) is str:
+                tag_text = " / {0}".format(event['tags'])
+            else:
+                tag_text = " / {0}".format(" ".join(event['tags']))
 
         # We handle future events & past events differently
         def format_future(format_time_func, delta):
@@ -450,6 +456,8 @@ def copy_todays_events(now, events, streams):
             # Something something &nbsp;
             text = text.replace("\t", "")
             text = text.replace("&nbsp;", "")
+            text = text.replace('["', "")
+            text = text.replace(']', "")
             return unicode(text.lower())
 
         # Get the text and link
@@ -582,12 +590,12 @@ def annotate_parsed_events(parsed):
         "talk_link", "slides_link", "video_link", "event_link", "post_link",
         "repo_link", "discussion_link"]
     short_link_keys = map(lambda x: "short_" + x, link_keys)
-    raw_keys = ["start", "location", "title", "description", "parsed",
-                "tags", "event_name", "talk_description", "last_post_text",
-                "blog_fmt_text"]
+    raw_keys = ["start", "location", "title", "description", "parsed", "post_id"]
+    string_keys = ["location", "title", "event_name", "talk_description",
+                   "last_post_text", "blog_fmt_text", "event_type"]
     time_keys = ["date", "start", "synced_to_blog"]
-    listish_keys = ["copresenters"]
-    relevant_keys = raw_keys + link_keys + short_link_keys + listish_keys + time_keys
+    listish_keys = ["copresenters", "tags"]
+    relevant_keys = raw_keys + link_keys + short_link_keys + listish_keys + time_keys + string_keys
     result = dict(map(
         lambda key: (key, parsed.get(key, None)),
         relevant_keys))
@@ -616,8 +624,8 @@ def annotate_parsed_events(parsed):
     def handle_string_ish_key(keyname):
         if result[keyname] is not None:
             # TODO: handle unicode input
-            result[keyname] = str(result[keyname])
-    map(handle_string_ish_key, raw_keys)
+            result[keyname] = result[keyname].encode('ascii', 'ignore')
+    map(handle_string_ish_key, string_keys)
 
     # Warn if we have unexpected keys
     unexpected = {key:value for key, value in parsed.items() if key not in relevant_keys}
@@ -675,13 +683,29 @@ def get_cal_events(cal_service):
     events = events_result.get('items', [])
     return map(post_process_event, events)
 
-def make_event_blogs(events):
+def make_event_blogs(events, blog_service):
     """Make the posts for the provided events.
     Mutates the events to contain the new post text if we generate a post."""
     event_and_posts = map(lambda event: (event, format_event_blog(event)), events)
     event_and_posts_to_be_updated = filter(
-        lambda e_p: e_p[0]["last_post_text"] != e_p[1], event_and_posts)
-    logger.debug(event_and_posts_to_be_updated)
+        lambda e_p: e_p[0]["last_post_text"] is not None and e_p[0]["last_post_text"] != e_p[1], event_and_posts)
+    event_and_posts_to_be_created = filter(
+        lambda e_p: e_p[0]["last_post_text"] is None, event_and_posts)
+    logger.debug(dir(blog_service))
+    logger.debug(dir(blog_service.blogs()))
+    blog_id_query = blog_service.blogs().getByUrl(url="http://blog.holdenkarau.com")
+    blog_id = blog_id_query.execute()['id']
+    logger.debug("Blog id {blog_id}".format(blog_id=blog_id))
+    for event, post in event_and_posts_to_be_created:
+        post_query = blog_service.posts().insert(
+            body={"title": event["title"] + " @ " + event["event_name"], "content": post},
+            blogId=blog_id)
+        post_result = post_query.execute()
+        event["post_link"] = post_result["url"]
+        event["post_id"] = post_result["id"]
+        event["last_post_text"] = post
+        event["short_post_link"] = shortten(event["post_link"])
+        break
     # Temporary hack only make one post per call, leave the rest for later
     # so as to not overwhelm.
     return events
@@ -720,11 +744,13 @@ def format_event_blog(event):
     def talk_links():
         link_text = ""
         if event["short_repo_link"] is not None:
-            link_text += "You can find the code for this talk at {short_repo_link}."
+            link_text += 'You can find the code for this <a href="{short_repo_link}">talk at {repo_link}</a>.'
         if event["short_slides_link"] is not None:
-            link_text += "The slides are at {short_slides_link}."
+            link_text += 'The <a href="{short_slides_link}">slides are at {short_slides_link}</a>.'
         if event["short_video_link"] is not None:
-            link_text =+ "The video of the talk is up at {short_video_link}."
+            link_text =+ 'The <a href="{short_video_link}">video of the talk is up at {short_video_link}</a>.'
+        if link_text == "" and event_type == "talk":
+            link_text = "I'll update this post with the slides"
         return link_text
 
     def talk_embeds():
@@ -739,18 +765,26 @@ def format_event_blog(event):
 
     def discussion():
         if event["discussion_link"]:
-            return "Join in the discussion at {short_discussion_link}"
+            return '<a href="{short_discussion_link}">Join in the discussion at {short_discussion_link}</a> :)'
+        elif event['date'] < now.date():
+            return "Comment bellow to join in the discussion :)"
         else:
-            return "Comment bellow to join in the discussion."
+            return "Come see to the {event_type} or comment bellow to join in the discussion :)"
 
 
     def footer():
         return os.getenv(
             "POST_FOOTER",
-            "Talk feedback is appreciated at http://bit.ly/holdenTalkFeedback")
+            '<a href="http://bit.ly/holdenTalkFeedback">Talk feedback is appreciated at http://bit.ly/holdenTalkFeedback</a>')
+
+    def title_w_link():
+        if event['short_talk_link']:
+            return '<a href="short_talk_link">{title}</a>'
+        return '{title}'
 
     fmt_elements = event.copy()
     other_elements = {
+        'event_type': event['event_type'] or "talk",
         'me_or_us': me_or_us(), 'year': year(),
         'thanks_or_come_join': thanks_or_come_join(), 'where': where(),
         'talk_details': talk_details(), 'talk_links': talk_links(), 'talk_embeds': talk_embeds(),
@@ -760,13 +794,10 @@ def format_event_blog(event):
     # Format until we're done
     c = 0
     post_string = event['blog_fmt_text'] or \
-        ("{thanks_or_come_join} {where} for {title}.{talk_details}{talk_links}"
+        ("{thanks_or_come_join} {where} for {title_w_link}.{talk_details}{talk_links}"
          "{talk_embeds}{discussion}.{footer}")
-    logger.debug("Formatting {post_string} with {fmt_elements}".format(
-        post_string=post_string, fmt_elements=fmt_elements))
     result = post_string.format(**fmt_elements)
     while result != result.format(**fmt_elements):
-        logger.debug(result)
         result = result.format(**fmt_elements)
     logger.debug(result)
     return result
@@ -823,7 +854,7 @@ if __name__ == '__main__':
     for env in required_envs:
         check_env_is_set(env)
 
-    yt_service, cal_service = get_authenticated_google_services()
+    yt_service, cal_service, blog_service = get_authenticated_google_services()
     streams = get_streams(yt_service)
     now = datetime.datetime.now()
 
@@ -843,7 +874,7 @@ if __name__ == '__main__':
     logger.debug("Fetching events.")
     events = load_events()
     # Make posts for events
-    # make_event_blogs(events)
+    make_event_blogs(events, blog_service)
     events_output_filename = os.getenv(
         "EVENTS_OUT_FILE",
         "{0}/repos/talk-info/out_events.yaml".format(expanduser("~")))
