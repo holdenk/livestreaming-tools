@@ -267,18 +267,24 @@ def copy_todays_events(now, events, streams):
         def format_past():
             # TODO(holden): Figure out media links for past talks
             if event['slides_link'] and event['video_link']:
-                full_text = "Slides and video now up from {title} at {short_slides_link} and {short_video_link}".format(
+                mini_link = "{short_slides_link} and {short_video_link}"
+                if event['short_post_link']:
+                    mini_link = "{short_post_link} (or direct {short_slides_link} / {short_video_link})"
+                mini_link.format(**event)
+                full_text = "Slides and video now up from {title} at {mini_link}".format(
                     title=title,
-                    short_slides_link=event['short_slides_link'],
-                    short_video_link=event['short_video_link'])
-                short_text = "Slides and video now up from {short_title} at {short_slides_link} and {short_video_link}{tag_text}".format(
+                    mini_link=mini_link)
+                short_text = "Slides and video now up from {short_title} at {mini_link}{tag_text}".format(
                     short_title=short_title,
-                    short_slides_link=event['short_slides_link'],
-                    short_video_link=event['short_video_link'],
+                    mini_link=mini_link,
                     tag_text=tag_text)
                 if len(short_text) > 230:
-                    short_text = "Slides & video from {0} at {1} and {2}".format(
-                        short_title, event['short_slides_link'], event['short_video_link'])
+                    if event['short_post_link']:
+                        short_text = "Slides & video from {0} at {1}".format(
+                            short_title, event['short_post_link'])
+                    else:
+                        short_text = "Slides & video from {0} at {1} & {2}".format(
+                            short_title, event['short_slides_link'], event['short_video_link'])
                 return (full_text, short_text, None, None, None, event['short_video_link'], short_title)
             # TODO(holden): Add a function to check if the slides have been linked on video.
             elif event['slides_link']:
@@ -762,6 +768,8 @@ def format_event_blog(event):
     def event_type():
         if event["event_type"] is not None:
             return event["event_type"]
+        elif "book" in event["title"].lower():
+            return "signing"
         else:
             return "talk"
 
