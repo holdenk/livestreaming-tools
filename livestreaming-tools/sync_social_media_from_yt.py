@@ -220,7 +220,7 @@ def copy_todays_events(now, events, streams):
 
         # Add the tags field with a space so it doesn't join the link
         tag_text = ""
-        if 'tags' in event:
+        if 'tags' in event and event['tags']:
             if type(event['tags']) is str:
                 tag_text = " / {0}".format(event['tags'])
             else:
@@ -249,7 +249,9 @@ def copy_todays_events(now, events, streams):
             # We often have a time, always have a date
             join_at = " @ {0}".format(format_time_func(event))
             link_text = ""
-            if event['short_talk_link'] is not None:
+            if event['short_post_link'] is not None:
+                link_text = " {0}".format(event["short_post_link"])
+            elif event['short_talk_link'] is not None:
                 link_text = " {0}".format(event['short_talk_link'])
             
             full_text = "{0}{1}{2} for {3}{4}".format(
