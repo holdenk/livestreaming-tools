@@ -12,6 +12,7 @@ import sets
 import sys
 from string import Formatter
 import time
+from tzlocal import get_localzone
 import markdown2
 
 import bufferapp
@@ -896,16 +897,10 @@ if __name__ == '__main__':
 
     # Try and work on both my computer and my server. Timezones :(
     timezone = pytz.timezone('US/Pacific')
-    if "PST" in time.tzname:
-        # current timezone is pacific
-        now = timezone.localize(now)
-    elif "UTC" in time.tznames:
-        # current timezone is UTC
-        now = pytz.UTC.localize(now)
-    else:
-        raise Exception("ugh timezones.")
-
+    local_timezone = get_localzone()
+    now = local_timezone.localize(now)
     now = now.astimezone(timezone)
+
     #update_stream_header(now, streams)
     logger.debug("Fetching events.")
     events = load_events()
