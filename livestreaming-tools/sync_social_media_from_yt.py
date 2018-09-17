@@ -736,12 +736,24 @@ def make_event_blogs(events, blog_service):
         event["last_post_text"] = post
     return events
 
+
+def tw_link(username):
+    if len(username) > 2 and username[0] == "@":
+        return ("<a href='https://www.twitter.com/{short_username}'>{username}</a>"
+                .format(username=username, short_username=username[1:]))
+    else:
+        return username
+
+
 def format_event_blog(event):
     def me_or_us():
         if event["copresenters"] is not None:
-            return "us"
+            presenters = ["@holdenkarau"]
+            presenters.extend(event["copresenters"])
+            presenters_html = ",".join(map(tw_link, presenters))
+            return "us ({presenters_html})".format(presenters_html=presenters_html)
         else:
-            return "me"
+            return "<a href='http://www.twitter.com/holdenkarau'>me</a>"
 
     def thanks_or_come_join():
         if event["date"] < now.date():
@@ -910,10 +922,10 @@ if __name__ == '__main__':
     make_event_blogs(events, blog_service)
     events_output_filename = os.getenv(
         "EVENTS_OUT_FILE",
-        "{0}/repos/talk-info/out_events.yaml".format(expanduser("~")))
+        "{0}/repos/talk-info/events.yaml".format(expanduser("~")))
     with open(events_output_filename, 'w') as f:
         keyed_events = dict(
-            map(lambda event: (event["event_name"], event),
+            map(lambda event: (event["event_name"] + ":" + event["title"], event),
                 events))
         yaml.dump(keyed_events, f)
-    copy_todays_events(now, events, streams)
+    #copy_todays_events(now, events, streams)
