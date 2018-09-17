@@ -928,4 +928,4 @@ if __name__ == '__main__':
             map(lambda event: (event["event_name"] + ":" + event["title"], event),
                 events))
         yaml.dump(keyed_events, f)
-    #copy_todays_events(now, events, streams)
+    copy_todays_events(now, events, streams)
