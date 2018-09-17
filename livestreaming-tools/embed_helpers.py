@@ -1,3 +1,8 @@
+import oembed
+consumer = oembed.OEmbedConsumer()
+slideshare_endpoint = oembed.OEmbedEndpoint('http://www.slideshare.net/api/oembed/2', ['http*://*.slideshare.net/*'])
+consumer.addEndpoint(slideshare_endpoint)
+
 def is_youtube(videolink):
     return videolink is not None and \
         ("youtube.com" in videolink or "youtu.be" in videolink)
@@ -19,6 +24,4 @@ def is_vimeo(videolink):
     return False
 
 def embed_slideshare(slidelink):
-    # TODO(something) - https://pypi.org/project/slideshare/
-    # OR https://embed.ly/provider/slideshare https://pypi.org/project/Embedly/
-    return ""
+    return consumer.embed(slidelink).getData()['html']
