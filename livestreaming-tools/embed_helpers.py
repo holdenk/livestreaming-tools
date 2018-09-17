@@ -13,7 +13,7 @@ def embed_youtube(videolink):
     url = videolink
     url = url.replace("https://youtu.be/", "https://www.youtube.com/embed/")
     url = url.replace("watch?v=", "embed/")
-    return '<iframe width="560" height="315" src="{url} allow="autoplay; encrypted-media" allowfullscreen></iframe>'.format(url=url)
+    return '<iframe width="560" height="315" src="{url}" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>'.format(url=url)
 
 
 def is_slideshare(slidelink):

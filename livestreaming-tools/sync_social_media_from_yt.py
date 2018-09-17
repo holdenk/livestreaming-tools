@@ -273,7 +273,7 @@ def copy_todays_events(now, events, streams):
                 mini_link = "{short_slides_link} and {short_video_link}"
                 if event['short_post_link']:
                     mini_link = "{short_post_link} (or direct {short_slides_link} / {short_video_link})"
-                mini_link.format(**event)
+                mini_link = mini_link.format(**event)
                 full_text = "Slides and video now up from {title} at {mini_link}".format(
                     title=title,
                     mini_link=mini_link)
@@ -795,7 +795,7 @@ def format_event_blog(event):
         if event["short_slides_link"] is not None:
             link_text += 'The <a href="{short_slides_link}">slides are at {short_slides_link}</a>.'
         if event["short_video_link"] is not None:
-            link_text =+ 'The <a href="{short_video_link}">video of the talk is up at {short_video_link}</a>.'
+            link_text += 'The <a href="{short_video_link}">video of the talk is up at {short_video_link}</a>.'
         # Put the link's in a paragraph.
         if link_text != "":
             link_text = "<p>{0}</p>".format(link_text)
