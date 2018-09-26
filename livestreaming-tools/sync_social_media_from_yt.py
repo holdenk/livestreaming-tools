@@ -266,8 +266,10 @@ def copy_todays_events(now, events, streams):
                 short_string = "{0}{1}{2}{3}".format(
                     join_on, join_at, short_title, link_text)
 
+            deflink = event['short_post_link'] or event['short_talk_link']
+
             return (full_text, short_text, event['start'] - delta,
-                    None, event['short_talk_link'], short_title)
+                    None, deflink, short_title)
 
         def format_past():
             # TODO(holden): Figure out media links for past talks
@@ -480,6 +482,7 @@ def copy_todays_events(now, events, streams):
             text = text.replace(']', "")
             text = text.replace('("', "")
             text = text.replace(')', "")
+            text = text.replace('&', "")
             return unicode(text.lower())
 
         # Get the text and link
@@ -926,7 +929,9 @@ if __name__ == '__main__':
     logger.debug("Fetching events.")
     events = load_events()
     # Make posts for events
+    logger.debug("Posting events to blog...")
     make_event_blogs(events, blog_service)
+    logger.debug("Updating event file")
     events_output_filename = os.getenv(
         "EVENTS_OUT_FILE",
         "{0}/repos/talk-info/events.yaml".format(expanduser("~")))
@@ -935,4 +940,5 @@ if __name__ == '__main__':
             map(lambda event: (event["event_name"] + ":" + event["title"], event),
                 events))
         yaml.dump(keyed_events, f)
+    logger.debug("Updating twitter.")
     copy_todays_events(now, events, streams)
