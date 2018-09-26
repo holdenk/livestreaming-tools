@@ -1,7 +1,7 @@
 BeautifulSoup==3.2.1
 beautifulsoup4==4.6.3
 bitly-api==0.3
-bufferapp==0.2.0
+-e git+git@github.com:holdenk/buffer-python.git@001a3bffda8736f32a8ffae3d26af9b79b2a3680#egg=buffer_python
 cachetools==2.1.0
 certifi==2018.4.16
 chardet==3.0.4
@@ -15,7 +15,9 @@ google-auth-httplib2==0.0.3
 google-auth-oauthlib==0.2.0
 httplib2==0.11.3
 idna==2.7
--e git+git@github.com:holdenk/livestreaming-tools.git@12b6d75da4649f4de9213daca56fb70ada447544#egg=livestreaming_tools
+-e git+git@github.com:holdenk/livestreaming-tools.git@18a6e5325d809644d54abf0942eec6a3a917dbe5#egg=livestreaming_tools
+Markdown==2.6.11
+markdown2==2.3.5
 memoize==1.0.0
 memoized==0.3
 mock==1.0.1
@@ -26,6 +28,7 @@ pkg-resources==0.0.0
 pyasn1==0.4.4
 pyasn1-modules==0.2.2
 python-dateutil==2.7.3
+python-oembed==0.2.4
 python-twitch-client==0.5.1
 pytz==2018.5
 PyYAML==3.13
@@ -34,5 +37,6 @@ requests==2.19.1
 requests-oauthlib==1.0.0
 rsa==3.4.2
 six==1.11.0
+tzlocal==1.5.1
 uritemplate==3.0.0
 urllib3==1.23
