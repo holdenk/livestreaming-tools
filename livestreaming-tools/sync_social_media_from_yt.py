@@ -478,6 +478,8 @@ def copy_todays_events(now, events, streams):
             text = text.replace("&nbsp;", "")
             text = text.replace('["', "")
             text = text.replace(']', "")
+            text = text.replace('("', "")
+            text = text.replace(')', "")
             return unicode(text.lower())
 
         # Get the text and link
