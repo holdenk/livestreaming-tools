@@ -15,7 +15,9 @@ import time
 from tzlocal import get_localzone
 import markdown2
 
-import bufferapp
+import buffpy
+from buffpy.models import User
+from buffpy.managers.profiles import Profiles
 from bs4 import BeautifulSoup
 import bitly_api
 from dateutil import parser
@@ -178,11 +180,11 @@ def copy_todays_events(now, events, streams):
     buffer_client_secret = os.getenv("BUFFER_CLIENT_SECRET")
     buffer_token = os.getenv("BUFFER_CODE")
 
-    buffer_api = bufferapp.API(
+    buffer_api = buffpy.API(
         client_id=buffer_clientid, client_secret=buffer_client_secret,
         access_token=buffer_token)
-    user = bufferapp.User(api=buffer_api)
-    profiles = bufferapp.Profiles(api=buffer_api).all()
+    user = User(api=buffer_api)
+    profiles = Profiles(api=buffer_api).all()
 
     # TODO(holden): Import talks from a special calendar
     # TODO(holden): Create a meta post of the weeks events
@@ -494,11 +496,14 @@ def copy_todays_events(now, events, streams):
             map(mini_clean_text, map(extract_text_from_update, all_updates)))
         # Kind of a hack cause of how media links is handled
         all_updates_special = sets.Set(map(extract_special, all_updates))
+        logger.debug("***********************************************")
+        logger.debug("Existing posts text: {0}".format(all_updates_text))
+        logger.debug("Specials: {0}".format(all_updates_special))
 
         def allready_published(post):
             in_all_updates_text = unicode(post[0]) in all_updates_text
             in_partial_text = unicode(mini_clean_text(post[0])) in all_updates_partial_text
-            logger.debug("Special: {0}".format((unicode(clean_odd_text(post[0])), unicode(post[3]))))
+            logger.debug("Special: {0}".format((unicode(clean_odd_text(post[0])), unicode(post[3]), unicode(post[4]))))
             in_special = (unicode(clean_odd_text(post[0])), unicode(post[3])) in all_updates_special
             in_special_ish = (unicode(clean_odd_text(post[0])), unicode(post[4])) in all_updates_special
             return in_all_updates_text or in_partial_text or in_special or in_special_ish
