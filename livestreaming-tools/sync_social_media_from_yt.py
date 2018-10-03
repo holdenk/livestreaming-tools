@@ -702,10 +702,14 @@ def get_cal_events(cal_service):
         result = process_event_yaml(description_text)
         # Augment result with the time info
         result["start"] = parsed_time
-        if not result["title"]:
-            result["title"] = str(cal_event['summary'])
-        if not result["location"] and 'location' in cal_event:
-            result["location"] = str(cal_event['location'])
+        try:
+            if not result["title"]:
+                result["title"] = str(cal_event['summary'])
+            if not result["location"] and 'location' in cal_event:
+                result["location"] = str(cal_event['location'])
+        except:
+            print("Had error processing {0}".format(cal_event))
+            raise
         return result
 
     events = events_result.get('items', [])
