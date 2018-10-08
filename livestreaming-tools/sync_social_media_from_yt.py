@@ -249,7 +249,7 @@ def copy_todays_events(now, events, streams):
                 else:
                     join_on = "join {0} @ {1} ".format(who, event['event_name'])
             # We often have a time, always have a date
-            join_at = " @ {0}".format(format_time_func(event))
+            join_at = " {0}".format(format_time_func(event))
             link_text = ""
             if event['short_post_link'] is not None:
                 link_text = " {0}".format(event["short_post_link"])
@@ -620,7 +620,7 @@ def annotate_parsed_events(parsed):
     short_link_keys = map(lambda x: "short_" + x, link_keys)
     raw_keys = ["start", "location", "title", "description", "parsed", "post_id"]
     string_keys = ["location", "title", "event_name", "talk_description",
-                   "last_post_text", "blog_fmt_text", "event_type"]
+                   "last_post_text", "blog_fmt_text", "event_type", "room"]
     time_keys = ["date", "start", "synced_to_blog"]
     listish_keys = ["copresenters", "tags"]
     relevant_keys = raw_keys + link_keys + short_link_keys + listish_keys + time_keys + string_keys
@@ -773,7 +773,13 @@ def format_event_blog(event):
         if event["date"] < now.date():
             return "Thanks for joining {me_or_us} on {date}"
         else:
-            return "Come join {me_or_us} on {date}"
+            return "Come join {me_or_us} on {time_or_date}"
+
+    def time_or_date():
+        if event["start"]:
+            return event["start"].strftime("%A %d %B @ %H:%M")
+        else:
+            return event["date"].strftime("%A %d. %B %Y")
 
     def year():
         year = str(event["date"].year)
@@ -792,6 +798,8 @@ def format_event_blog(event):
         if event["talk_description"] is not None:
             new_description = markdown2.markdown(event["talk_description"])
             return "The talk covered: {new_description}.".format(new_description=new_description)
+        elif event["room"] is not None:
+            return "The room will be <b>{room}</b>."
         return ""
 
     def event_type():
@@ -850,6 +858,7 @@ def format_event_blog(event):
     other_elements = {
         'event_type': event_type(),
         'me_or_us': me_or_us(), 'year': year(),
+        'time_or_date': time_or_date(),
         'thanks_or_come_join': thanks_or_come_join(), 'where': where(),
         'talk_details': talk_details(), 'talk_links': talk_links(), 'talk_embeds': talk_embeds(),
         'title_w_link': title_w_link(),
