@@ -157,6 +157,7 @@ def make_event_blogs(events, blog_service):
     blog_id = blog_id_query.execute()['id']
     logger.debug("Blog id {blog_id}".format(blog_id=blog_id))
     for event, post in event_and_posts_to_be_created:
+        event["changed"] = True
         post_query = blog_service.posts().insert(
             body={"title": event["title"] + " @ " + event["event_name"], "content": post},
             blogId=blog_id)
@@ -169,6 +170,7 @@ def make_event_blogs(events, blog_service):
         # so as to not overwhelm. TODO(holden) -- better schedualing
         break
     for event, post in event_and_posts_to_be_updated:
+        event["changed"] = True
         post_query = blog_service.posts().update(
             body={"title": event["title"] + " @ " + event["event_name"], "content": post},
             blogId=blog_id, postId=event["post_id"])

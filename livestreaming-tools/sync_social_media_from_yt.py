@@ -231,6 +231,9 @@ def copy_todays_events(events, streams):
                     None, deflink, short_title)
 
         def format_past():
+            # Don't post slides multiple times
+            if "changed" not in event or not event['changed']:
+                return []
             # TODO(holden): Figure out media links for past talks
             if event['slides_link'] and event['video_link']:
                 mini_link = "{short_slides_link} and {short_video_link}"
@@ -442,6 +445,7 @@ def copy_todays_events(events, streams):
             text = text.replace('("', "")
             text = text.replace(')', "")
             text = text.replace('&', "")
+            text = text.replace(':', "")
             return unicode(text.lower())
 
         # Get the text and link
@@ -724,14 +728,20 @@ if __name__ == '__main__':
     # Make posts for events
     logger.debug("Posting events to blog...")
     make_event_blogs(events, blog_service)
-    logger.debug("Updating event file")
-    events_output_filename = os.getenv(
-        "EVENTS_OUT_FILE",
-        "{0}/repos/talk-info/events.yaml".format(expanduser("~")))
-    with open(events_output_filename, 'w') as f:
-        keyed_events = dict(
-            map(lambda event: (event["event_name"] + ":" + event["title"], event),
-                events))
-        yaml.dump(keyed_events, f)
-    logger.debug("Updating twitter.")
-    #copy_todays_events(events, streams)
+    try:
+        logger.debug("Updating twitter.")
+        copy_todays_events(events, streams)
+    # If social media fails still log the state of the events.
+    finally:
+        # Remove the changed variable we keep track of temporarily in our pipeline
+        for event in events:
+            event.pop("changed", None)
+        logger.debug("Updating event file")
+        events_output_filename = os.getenv(
+            "EVENTS_OUT_FILE",
+            "{0}/repos/talk-info/events.yaml".format(expanduser("~")))
+        with open(events_output_filename, 'w') as f:
+            keyed_events = dict(
+                map(lambda event: (event["event_name"] + ":" + event["title"], event),
+                    events))
+            yaml.dump(keyed_events, f)
