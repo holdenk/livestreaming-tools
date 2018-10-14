@@ -1,8 +1,10 @@
 from __future__ import print_function
 
 import os
+
 import bitly_api
 import memoized
+
 
 @memoized.memoized
 def shortten(link):

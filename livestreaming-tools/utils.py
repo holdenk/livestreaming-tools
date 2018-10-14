@@ -1,7 +1,9 @@
 import datetime
-import pytz
+
 import memoized
+import pytz
 from tzlocal import get_localzone
+
 
 @memoized.memoized
 def pacific_now():
@@ -19,4 +21,3 @@ def time_from_utc_to_pacific(input_time):
     pacific_timezone = pytz.timezone('US/Pacific')
     pacific_time = utc_time.astimezone(pacific_timezone)
     return pacific_time
-    

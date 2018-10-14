@@ -1,4 +1,5 @@
 import oembed
+
 consumer = oembed.OEmbedConsumer()
 slideshare_endpoint = oembed.OEmbedEndpoint('http://www.slideshare.net/api/oembed/2', ['http*://*.slideshare.net/*'])
 consumer.addEndpoint(slideshare_endpoint)

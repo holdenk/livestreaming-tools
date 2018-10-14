@@ -3,36 +3,35 @@ from __future__ import print_function
 
 import datetime
 import json
+import logging
 import os
-from os.path import expanduser
-import pytz
 import random
 import re
 import sets
 import sys
-from string import Formatter
 import time
+from itertools import chain, imap
+from os.path import expanduser
+from string import Formatter
 
-import buffpy
-from buffpy.models import User
-from buffpy.managers.profiles import Profiles
-from bs4 import BeautifulSoup
-from dateutil import parser
 import google.oauth2.credentials
 import google_auth_oauthlib.flow
+import pytz
+import yaml
+from bs4 import BeautifulSoup
+from dateutil import parser
+from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from google_auth_oauthlib.flow import InstalledAppFlow
 from twitch import TwitchClient
-from itertools import chain, imap
-import yaml
-import logging
 
-from shortten import shortten
+import buffpy
 from blog import make_event_blogs
-from utils import pacific_now
+from buffpy.managers.profiles import Profiles
+from buffpy.models import User
+from shortten import shortten
 from streams import list_streams
-
+from utils import pacific_now
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)

@@ -1,13 +1,14 @@
 #!/home/hkarau/repos/livestreaming-tools/myvenv/bin/python
 from __future__ import print_function
+
 import logging
-import markdown2
 import os
 
-from utils import pacific_now
-from shortten import shortten
-from embed_helpers import *
+import markdown2
 
+from embed_helpers import *
+from shortten import shortten
+from utils import pacific_now
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
