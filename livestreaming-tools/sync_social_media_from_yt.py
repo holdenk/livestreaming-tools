@@ -567,7 +567,7 @@ def process_event_yaml(yaml_txt):
 def annotate_parsed_events(parsed):
     link_keys = [
         "talk_link", "slides_link", "video_link", "event_link", "post_link",
-        "repo_link", "discussion_link"]
+        "repo_link", "discussion_link", "codelab_link"]
     short_link_keys = map(lambda x: "short_" + x, link_keys)
     raw_keys = ["start", "location", "title", "description", "parsed", "post_id"]
     string_keys = ["location", "title", "event_name", "talk_description",

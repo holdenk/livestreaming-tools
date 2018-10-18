@@ -83,6 +83,8 @@ def format_event_blog(event):
         if event["short_video_link"] is not None:
             link_text += 'The <a href="{short_video_link}">video of the talk is up at {short_video_link}</a>.'
         # Put the link's in a paragraph.
+        if event["short_codelab_link"] is not None:
+            link_text += 'And if you want there is a <a href="{short_codelab_link}">related codelab you can try out</a>.'
         if link_text != "":
             link_text = "<p>{0}</p>".format(link_text)
         if link_text == "" and event_type() == "talk":
