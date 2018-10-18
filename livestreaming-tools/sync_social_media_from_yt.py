@@ -256,11 +256,16 @@ def copy_todays_events(events, streams):
                 return (full_text, short_text, None, None, None, event['short_video_link'], short_title)
             # TODO(holden): Add a function to check if the slides have been linked on video.
             elif event['slides_link']:
-                full_text = "Slides now up from {title} at {short_slides_link} :)".format(
-                    title=title, short_slides_link=event['short_slides_link'])
-                short_text = "Slides now up from {short_title} at {short_slides_link}{tag_text}:)".format(
+                mini_link = "{short_slides_link}"
+                if event['short_post_link']:
+                    mini_link = "{short_post_link} (or direct {short_slides_link})"
+                mini_link = mini_link.format(**event)
+
+                full_text = "Slides now up from {title} at {mini_link} :)".format(
+                    title=title, mini_link=mini_link)
+                short_text = "Slides now up from {short_title} at {mini_link}{tag_text}:)".format(
                     short_title=short_title,
-                    short_slides_link=event['short_slides_link'],
+                    mini_link=mini_link,
                     tag_text=tag_text)
                 if len(short_text) > 230:
                     short_text = "Slides from {short_title} @ {short_slides_link}".format(
