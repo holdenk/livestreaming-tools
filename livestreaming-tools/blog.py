@@ -12,6 +12,7 @@ from utils import pacific_now
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
+logger.setLevel("DEBUG")
 
 
 def tw_link(username):
@@ -23,7 +24,12 @@ def tw_link(username):
 
 
 def format_event_blog(event):
+    logger.debug("Formatting event title: {0}\n".format(event["title"]))
+
     now = pacific_now()
+    event_in_past = event["date"] < now.date() or \
+        ("start" in event and event["start"] and event["start"] < now)
+
     def me_or_us():
         if event["copresenters"] is not None:
             presenters = ["@holdenkarau"]
@@ -34,7 +40,7 @@ def format_event_blog(event):
             return "<a href='http://www.twitter.com/holdenkarau'>me</a>"
 
     def thanks_or_come_join():
-        if event["date"] < now.date():
+        if event_in_past:
             return "Thanks for joining {me_or_us} on {date}"
         else:
             return "Come join {me_or_us} on {time_or_date}"
@@ -104,7 +110,7 @@ def format_event_blog(event):
     def discussion():
         if event["discussion_link"]:
             return '<a href="{short_discussion_link}">Join in the discussion at {short_discussion_link}</a> :)'
-        elif event['date'] < now.date():
+        elif event_in_past:
             return "Comment bellow to join in the discussion :)"
         else:
             return "Come see to the {event_type} or comment bellow to join in the discussion :)"
