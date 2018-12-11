@@ -1,4 +1,7 @@
+from __future__ import print_function
+
 import oembed
+import time
 
 consumer = oembed.OEmbedConsumer()
 slideshare_endpoint = oembed.OEmbedEndpoint('http://www.slideshare.net/api/oembed/2', ['http*://*.slideshare.net/*'])
@@ -25,4 +28,13 @@ def is_vimeo(videolink):
     return False
 
 def embed_slideshare(slidelink):
-    return consumer.embed(slidelink).getData()['html']
+    try:
+        try:
+            time.sleep(5)
+            return consumer.embed(slidelink).getData()['html']
+        except:
+            time.sleep(35)
+            return consumer.embed(slidelink).getData()['html']
+    except:
+        print("Failed to get embed for {0}".format(slidelink))
+        raise

@@ -119,7 +119,6 @@ def copy_todays_events(events, streams):
             delta < datetime.timedelta(days=7)
 
     upcoming_streams = filter(soon, streams)
-
     # Filter to events in the next 7 days
     def soon_event(event):
         # We always have a date, we might not know what time were speaking like at DDTX
@@ -571,14 +570,14 @@ def process_event_yaml(yaml_txt):
 
 def annotate_parsed_events(parsed):
     link_keys = [
-        "talk_link", "slides_link", "video_link", "event_link", "post_link",
+        "talk_link", "slides_link", "video_link", "related_video", "event_link", "post_link",
         "repo_link", "discussion_link", "codelab_link"]
     short_link_keys = map(lambda x: "short_" + x, link_keys)
     raw_keys = ["start", "location", "title", "description", "parsed", "post_id"]
     string_keys = ["location", "title", "event_name", "talk_description",
                    "last_post_text", "blog_fmt_text", "event_type", "room"]
     time_keys = ["date", "start", "synced_to_blog"]
-    listish_keys = ["copresenters", "tags"]
+    listish_keys = ["copresenters", "tags", "related_links"]
     relevant_keys = raw_keys + link_keys + short_link_keys + listish_keys + time_keys + string_keys
     result = dict(map(
         lambda key: (key, parsed.get(key, None)),

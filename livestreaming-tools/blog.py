@@ -88,6 +88,8 @@ def format_event_blog(event):
             link_text += 'The <a href="{short_slides_link}">slides are at {short_slides_link}</a>.'
         if event["short_video_link"] is not None:
             link_text += 'The <a href="{short_video_link}">video of the talk is up at {short_video_link}</a>.'
+        if event["short_related_video"] is not None:
+            link_text += 'There is a <a href="{short_related_video}">related video</a> you might want to check out.'
         # Put the link's in a paragraph.
         if event["short_codelab_link"] is not None:
             link_text += 'And if you want there is a <a href="{short_codelab_link}">related codelab you can try out</a>.'
@@ -103,6 +105,8 @@ def format_event_blog(event):
             embed_text += embed_youtube(event["video_link"])
         elif is_vimeo(event["video_link"]):
             embed_text += embed_vimeo(event["video_link"])
+        if is_youtube(event["related_video"]):
+            embed_text += embed_youtube(event["related_video"])
         if is_slideshare(event["slides_link"]):
             embed_text += embed_slideshare(event["slides_link"])
         return embed_text
@@ -126,6 +130,14 @@ def format_event_blog(event):
             return '<a href="{short_talk_link}">{title}</a>'
         return '{title}'
 
+    def generate_related_links():
+        if event['related_links']:
+            links = map(lambda link_text:
+                '<a href="{link}">{text}</a>'.format(link=link_text[0], text=link_text[1]),
+                event['related_links'])
+            return 'And some related links: ' + ", ".join(links)
+        return ""
+
     fmt_elements = event.copy()
     other_elements = {
         'event_type': event_type(),
@@ -134,6 +146,7 @@ def format_event_blog(event):
         'thanks_or_come_join': thanks_or_come_join(), 'where': where(),
         'talk_details': talk_details(), 'talk_links': talk_links(), 'talk_embeds': talk_embeds(),
         'title_w_link': title_w_link(),
+        'related_links': generate_related_links(),
         'discussion': discussion(), 'footer': footer()}
     fmt_elements.update(other_elements)
 
@@ -141,7 +154,7 @@ def format_event_blog(event):
     c = 0
     post_string = event['blog_fmt_text'] or \
         ("{thanks_or_come_join} {where} for {title_w_link}.{talk_details}{talk_links}"
-         "{talk_embeds}{discussion}.{footer}")
+         "{talk_embeds}{related_links}{discussion}.{footer}")
     result = post_string.format(**fmt_elements)
     while result != result.format(**fmt_elements):
         result = result.format(**fmt_elements)
