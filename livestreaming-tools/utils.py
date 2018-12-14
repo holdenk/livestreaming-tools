@@ -4,6 +4,11 @@ import memoized
 import pytz
 from tzlocal import get_localzone
 
+def get_now_to_match(date):
+    if date is datetime.date:
+        return datetime.datetime.now()
+    else:
+        return pacific_now()
 
 @memoized.memoized
 def pacific_now():

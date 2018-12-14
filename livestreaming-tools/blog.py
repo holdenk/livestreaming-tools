@@ -8,7 +8,7 @@ import markdown2
 
 from embed_helpers import *
 from shortten import shortten
-from utils import pacific_now
+from utils import pacific_now, get_now_to_match
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)

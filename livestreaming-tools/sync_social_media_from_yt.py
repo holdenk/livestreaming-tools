@@ -225,8 +225,11 @@ def copy_todays_events(events, streams):
 
             deflink = event['short_post_link'] or event['short_talk_link']
 
-            return (full_text, short_text, event['start'] - delta,
-                    None, deflink, short_title)
+            post_time = event['date'] - delta
+            if 'start' in event and event['start'] is not None:
+                post_time = event['start'] - delta
+
+            return (full_text, short_text, post_time, None, deflink, short_title)
 
         def format_past():
             # Don't post slides multiple times
@@ -289,7 +292,7 @@ def copy_todays_events(events, streams):
             todaydelta = datetime.timedelta(hours=4, minutes=55)
             today_post = format_future(format_time_join_me_today, todaydelta)
             # Skip everything else if we're already at today
-            if event['start'].date() == now.date():
+            if event['date'] == now.date():
                 return [today_post]
 
             # Post for join me this week
@@ -399,7 +402,12 @@ def copy_todays_events(events, streams):
         # If we don't have a time to schedule always a good time
         if post[2] is None:
             return True
-        delta_from_now = post[2] - now
+        delta_from_now = None
+        print("Doing {0}-{1}".format(post[2], now))
+        try:
+            delta_from_now = post[2] - now
+        except:
+            delta_from_now = post[2] - now.date()
         return delta_from_now < datetime.timedelta(hours=25, minutes=55) and \
             delta_from_now > datetime.timedelta(days=-5)
 
@@ -649,14 +657,25 @@ def get_cal_events(cal_service):
         orderBy='startTime').execute()
     def post_process_event(cal_event):
         """Extract useful fields from the event."""
-        parsed_time = parser.parse(str(cal_event['start']['dateTime']))
-        if 'timeZone' in cal_event['start']:
-            timezone = pytz.timezone(cal_event['start']['timeZone'])
-            parsed_time = parsed_time.astimezone(timezone)
+        print(cal_event)
+        # Extract the date time and annotate timezone is available
+        parsed_time = None
+        if 'dateTime' in cal_event['start']:
+            parsed_time = parser.parse(str(cal_event['start']['dateTime']))
+            if 'timeZone' in cal_event['start']:
+                timezone = pytz.timezone(cal_event['start']['timeZone'])
+                parsed_time = parsed_time.astimezone(timezone)
+
         description_text = cal_event.get('description', None) or ""
         result = process_event_yaml(description_text)
         # Augment result with the time info
         result["start"] = parsed_time
+        # Handle dates
+        if parsed_time is not None:
+            result["date"] = parsed_time.date()
+        else:
+            result["date"] = parser.parse(str(cal_event['start']['date'])).date()
+
         try:
             if not result["title"]:
                 result["title"] = str(cal_event['summary'])
