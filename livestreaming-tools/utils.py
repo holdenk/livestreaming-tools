@@ -3,6 +3,7 @@ import datetime
 import memoized
 import pytz
 from tzlocal import get_localzone
+from HTMLParser import HTMLParser
 
 def get_now_to_match(date):
     if date is datetime.date:
@@ -26,3 +27,12 @@ def time_from_utc_to_pacific(input_time):
     pacific_timezone = pytz.timezone('US/Pacific')
     pacific_time = utc_time.astimezone(pacific_timezone)
     return pacific_time
+
+class MLStripper(HTMLParser):
+    def __init__(self):
+        self.reset()
+        self.fed = []
+    def handle_data(self, d):
+        self.fed.append(d)
+    def get_data(self):
+        return ''.join(self.fed)

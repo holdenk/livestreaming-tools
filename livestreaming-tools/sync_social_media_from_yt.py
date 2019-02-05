@@ -33,6 +33,7 @@ from shortten import shortten
 from streams import list_streams
 from utils import pacific_now
 
+
 logging.basicConfig()
 logger = logging.getLogger(__name__)
 
@@ -572,7 +573,15 @@ def get_streams(yt_service):
 
 
 def process_event_yaml(yaml_txt):
-    """Process the event YAML"""
+    """Process the event YAML, strip HTML because GCLAL is annoying"""
+    if "<br>" in yaml_txt:
+        # I hate google cal, it sometimes converts \ns to brs
+        yaml_text = re.sub("<br>", "\n", yaml_text)
+        # And it randomly linkifies other stuff, we can toss the rest of tags
+        s = MLStripper()
+        s.feed(html)
+        yaml_text =  s.get_data()
+
     parsed_description = dict(yaml.load(yaml_txt) or {})
     return annotate_parsed_events(parsed_description)
 
