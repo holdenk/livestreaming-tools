@@ -601,6 +601,11 @@ def annotate_parsed_events(parsed):
         relevant_keys))
     # Process the links
     def process_link(keyname):
+        if result[keyname] is not None and "<a href" in result[keyname]:
+            # Strip HTML out of links
+            result[keyname] = unicode(BeautifulSoup(
+                result[keyname],
+                features="html.parser").get_text())
         if result[keyname] is not None and result["short_" + keyname] is None:
             result["short_" + keyname] = shortten(result[keyname])
 
