@@ -125,7 +125,11 @@ def copy_todays_events(events, streams):
         # We always have a date, we might not know what time were speaking like at DDTX
         delta = event['date'] - now.date()
         if 'start' in event and event['start'] is not None:
-            delta = event['start'] - now
+            try:
+                delta = event['start'] - now
+            except TypeError:
+                # Eh day is good enough timezones are evil
+                pass
         return delta > datetime.timedelta(minutes=5) and \
             delta < datetime.timedelta(days=7)
 
