@@ -683,6 +683,9 @@ def get_cal_events(cal_service):
             if 'timeZone' in cal_event['start']:
                 timezone = pytz.timezone(cal_event['start']['timeZone'])
                 parsed_time = parsed_time.astimezone(timezone)
+            else:
+                timezone = pytz.timezone("US/Pacific")
+                parsed_time = parsed_time.astimezone(timezone)
 
         description_text = cal_event.get('description', None) or ""
         result = process_event_yaml(description_text)
