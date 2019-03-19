@@ -122,13 +122,20 @@ def copy_todays_events(events, streams):
     upcoming_streams = filter(soon, streams)
     # Filter to events in the next 7 days
     def soon_event(event):
-        # We always have a date, we might not know what time were speaking like at DDTX
-        delta = event['date'] - now.date()
-        if 'start' in event and event['start'] is not None:
-            delta = event['start'] - now
+        try:
+            # We always have a date, we might not know what time were speaking like at DDTX
+            delta = event['date'] - now.date()
+            if 'start' in event and event['start'] is not None:
+                try:
+                    delta = event['start'] - now
+                except:
+                    pass
 
-        return delta > datetime.timedelta(minutes=5) and \
-            delta < datetime.timedelta(days=7)
+            return delta > datetime.timedelta(minutes=5) and \
+                delta < datetime.timedelta(days=7)
+        except Exception as e:
+            logger.error("Event {0} had error {1}".format(event, e))
+            raise e
 
     upcoming_events = filter(soon_event, events)
 
