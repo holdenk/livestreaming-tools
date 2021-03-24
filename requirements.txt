@@ -35,7 +35,7 @@ PyYAML==3.13
 rauth==0.6.2
 requests==2.19.1
 requests-oauthlib==1.0.0
-rsa==3.4.2
+rsa==4.1
 six==1.11.0
 tzlocal==1.5.1
 uritemplate==3.0.0
