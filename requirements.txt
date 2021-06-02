@@ -17,7 +17,7 @@ httplib2==0.11.3
 idna==2.7
 -e git+git@github.com:holdenk/livestreaming-tools.git@18a6e5325d809644d54abf0942eec6a3a917dbe5#egg=livestreaming_tools
 Markdown==2.6.11
-markdown2==2.3.5
+markdown2==2.4.0
 memoize==1.0.0
 memoized==0.3
 mock==1.0.1
