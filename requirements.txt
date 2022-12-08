@@ -3,7 +3,7 @@ beautifulsoup4==4.6.3
 bitly-api==0.3
 -e git+git@github.com:holdenk/buffer-python.git@001a3bffda8736f32a8ffae3d26af9b79b2a3680#egg=buffer_python
 cachetools==2.1.0
-certifi==2018.4.16
+certifi==2022.12.7
 chardet==3.0.4
 colorama==0.2.7
 configparser==3.5.0
